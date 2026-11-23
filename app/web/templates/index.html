@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMC Cytogenetics Report</title>
+<style>
+:root{
+  --bg:#eef2f5; --surface:#fff; --surface-2:#f6f8fa; --ink:#1c2b36; --label:#4a5b68; --muted:#7a8a96;
+  --line:#d5dee5; --accent:#1d6f8a; --accent-2:#15566b; --danger:#c0392b; --radius:7px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;display:flex;flex-direction:column}
+header{background:linear-gradient(90deg,#174f63,#1d6f8a);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 18px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0 12px 0 0;font-weight:700;letter-spacing:.2px}
+header .sub{opacity:.8;font-size:12px;margin-right:auto}
+.btn{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--radius);padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.45)}
+.btn.ghost:hover{background:rgba(255,255,255,.12)}
+.btn.small{padding:4px 10px;font-size:12px}
+.btn.danger{color:var(--danger);border-color:#e8a9a9}
+.btn:disabled{opacity:.55;cursor:default}
+main{flex:1;display:flex;min-height:0}
+#form{width:50%;min-width:420px;overflow-y:auto;padding:18px 22px 40px;display:flex;flex-direction:column;gap:16px}
+#preview{flex:1;display:flex;flex-direction:column;border-left:1px solid var(--line);min-width:0;background:#e3e9ee}
+#preview-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+#preview-status{font-size:12px;color:var(--muted)}
+#preview-status.err{color:var(--danger)}
+#pages{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;align-items:center;gap:14px}
+#pages img{width:100%;max-width:820px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h2 .spacer{flex:1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.full{grid-column:1/-1}
+label{display:block;font-size:12px;font-weight:600;color:var(--label);margin-bottom:3px}
+input[type=text],textarea,select{width:100%;border:1.5px solid var(--line);border-radius:var(--radius);padding:7px 9px;font:inherit;color:var(--ink);background:#fff}
+input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,138,.13)}
+textarea{resize:vertical;min-height:64px}
+.hint{font-size:12px;color:var(--muted);margin:2px 0 0}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2)}
+#drop.over{border-color:var(--accent);color:var(--accent);background:#eef6f8}
+#vlist{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:none}
+#vlist table{width:100%;border-collapse:collapse;font-size:13px}
+#vlist th{background:var(--surface-2);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--label);padding:6px 8px}
+#vlist td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}
+#vlist tr.row{cursor:pointer}
+#vlist tr.row:hover{background:#f3f8fa}
+#vlist tr.row.current{background:#e4f0f4}
+#vlist tr.row.ticked td:nth-child(2){font-weight:700}
+.gene{font-style:italic;font-weight:700}
+.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;background:#eef1f4;color:var(--label)}
+.tag.p{background:#fde8e8;color:#b42318}.tag.lp{background:#fff1e6;color:#b45309}.tag.vus{background:#eef4ff;color:#1d4ed8}
+#veditor{display:none;margin-top:12px;border:1.5px solid var(--accent);border-radius:10px;padding:12px 14px;background:#fbfdfe}
+#veditor h3{margin:0 0 10px;font-size:14px}
+.row-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2b36;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
+#toast.show{opacity:1}
+@media (max-width:900px){main{flex-direction:column}#form{width:100%;min-width:0}#preview{min-height:70vh;border-left:0;border-top:1px solid var(--line)}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>CMC Cytogenetics Report</h1>
+  <span class="sub">NGS-WES (Whole Exome &amp; Mitochondrial) · Department of Cytogenetics, CMC Vellore</span>
+  <button class="btn ghost" id="new-btn" title="Clear the form">New report</button>
+  <button class="btn ghost" id="save-draft">Save draft</button>
+  <label class="btn ghost" style="margin:0;color:#fff">Load draft<input type="file" id="load-draft" accept=".json" hidden></label>
+  <button class="btn" id="export-docx">Export DOCX</button>
+  <button class="btn primary" id="export-pdf" style="border-color:#fff">Export PDF</button>
+</header>
+
+<main>
+<section id="form">
+
+  <div class="card">
+    <h2>Patient &amp; sample</h2>
+    <div class="grid">
+      <div><label for="p-name">Name</label><input type="text" id="p-name" data-p="name" placeholder="e.g. Baby. Name"></div>
+      <div><label for="p-hosp_no">Hosp No</label><input type="text" id="p-hosp_no" data-p="hosp_no"></div>
+      <div><label for="p-age">Age</label><input type="text" id="p-age" data-p="age" placeholder="e.g. 6 Years"></div>
+      <div><label for="p-lab_no">Lab No</label><input type="text" id="p-lab_no" data-p="lab_no" placeholder="e.g. WES 02/26"></div>
+      <div><label for="p-sex">Sex</label>
+        <input type="text" id="p-sex" data-p="sex" list="sex-list" placeholder="Male / Female">
+        <datalist id="sex-list"><option value="Male"><option value="Female"></datalist></div>
+      <div><label for="p-sample">Sample</label>
+        <input type="text" id="p-sample" data-p="sample" list="sample-list" placeholder="Peripheral Blood">
+        <datalist id="sample-list"></datalist></div>
+      <div><label for="p-referred_by">Referred by</label><input type="text" id="p-referred_by" data-p="referred_by" placeholder="Dr. …"></div>
+      <div><label for="p-received_date">Date of receipt</label><input type="text" id="p-received_date" data-p="received_date" placeholder="dd/mm/yyyy"></div>
+      <div><label for="p-unit">Unit</label><input type="text" id="p-unit" data-p="unit"></div>
+      <div><label for="p-report_date">Date of report</label><input type="text" id="p-report_date" data-p="report_date" placeholder="dd/mm/yyyy"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Indication</h2>
+    <textarea id="f-indication" data-f="indication" placeholder="Reason for testing / clinical features"></textarea>
+  </div>
+
+  <div class="card">
+    <h2>Variants <span class="spacer"></span>
+      <button class="btn small" id="add-variant" title="Add a variant typed by hand">+ Add variant</button></h2>
+    <div id="drop">Click or drop the VarSeq <b>listed-variants Excel</b> (.xlsx) here
+      <input type="file" id="xlsx" accept=".xlsx,.xlsm" hidden></div>
+    <p class="hint">Tick the variants to report. Each ticked variant gets a row in the findings table and a description (its OMIM phenotype and evidence text). Click a variant to choose its block — Primary, Secondary or Incidental finding (VarSeq's secondary findings start as Secondary). With no primary variant ticked, the report has no primary-finding table.</p>
+    <div id="vlist"><table><thead><tr><th style="width:34px"></th><th>Gene</th><th>Variant</th><th>Zygosity</th><th>Classification</th></tr></thead><tbody></tbody></table></div>
+
+    <div id="veditor">
+      <h3 id="ve-title"></h3>
+      <div class="grid">
+        <div><label>Gene</label><input type="text" data-v="gene"></div>
+        <div><label>Gene full name <span class="hint">(optional)</span></label><input type="text" data-v="gene_name" placeholder="e.g. Dihydropyrimidine dehydrogenase"></div>
+        <div><label>HGNC ID <span class="hint">(optional)</span></label><input type="text" data-v="hgnc" placeholder="e.g. 3012"></div>
+        <div><label>Transcript (NM)</label><input type="text" data-v="nm_id" placeholder="NM_000110.4"></div>
+        <div><label>c. change</label><input type="text" data-v="variant" placeholder="c.1905+1G>A"></div>
+        <div><label>p. change (with NP_ if wanted)</label><input type="text" data-v="protein" placeholder="NP_000101.2:p.(?)"></div>
+        <div class="full"><label>Genomic position</label><input type="text" data-v="genomic_position" placeholder="NC_000001.11:g.97450058C>T"></div>
+        <div><label>Location</label><input type="text" data-v="region" placeholder="Intron 14/22"></div>
+        <div><label>Consequence</label><input type="text" data-v="consequence" placeholder="Splice Donor Variant"></div>
+        <div><label>Zygosity</label><input type="text" data-v="zygosity" list="zyg-list" placeholder="HET / HOM / HEMI">
+          <datalist id="zyg-list"><option value="Heterozygous"><option value="Homozygous"><option value="Hemizygous"></datalist></div>
+        <div><label>ACMG classification</label><input type="text" data-v="classification" list="class-list">
+          <datalist id="class-list"></datalist></div>
+        <div class="full"><label>Disease (separate several with ;)</label><input type="text" data-v="disease"></div>
+        <div><label>Inheritance (codes)</label><input type="text" data-v="inheritance" placeholder="AR / AD / XLR …"></div>
+        <div><label>ACMG attributes (criteria)</label><input type="text" data-v="criteria" placeholder="PVS1, PM2, PP4"></div>
+        <div class="full"><label>Gene / disease description (OMIM phenotype)</label><textarea data-v="omim_phenotype" style="min-height:90px"></textarea></div>
+        <div class="full"><label>Variant evidence</label><textarea data-v="evidence" style="min-height:90px" placeholder="Type of variant, population frequency, literature / ClinVar reports …"></textarea>
+          <p class="hint">Leave a blank line between paragraphs.</p></div>
+      </div>
+      <div class="row-actions">
+        <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="ve-selected"> Report this variant</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0">in
+          <select data-v="finding" style="width:auto">
+            <option value="">Primary finding</option>
+            <option value="secondary">Secondary finding</option>
+            <option value="incidental">Incidental finding</option>
+          </select></label>
+        <span style="flex:1"></span>
+        <button class="btn small danger" id="ve-delete">Remove from list</button>
+        <button class="btn small" id="ve-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Result text</h2>
+    <div class="grid">
+      <div class="full"><label for="f-summary">Summary</label>
+        <textarea id="f-summary" data-f="summary" style="min-height:90px"></textarea>
+        <p class="hint">Blank = a sentence built from the ticked primary variants (or the no-variant sentence).</p></div>
+      <div class="full"><label for="f-secondary_summary">Secondary finding — Summary <span class="hint">(used when a ticked variant is in the Secondary finding block)</span></label>
+        <textarea id="f-secondary_summary" data-f="secondary_summary" placeholder="Blank = &quot;A pathogenic variant was identified in the … gene in a heterozygous state (see table below).&quot;"></textarea></div>
+      <div class="full"><label for="f-incidental_summary">Incidental finding — Summary <span class="hint">(used when a ticked variant is in the Incidental finding block)</span></label>
+        <textarea id="f-incidental_summary" data-f="incidental_summary" placeholder="Blank = &quot;A pathogenic variant was identified in the … gene in a heterozygous state (see table below).&quot;"></textarea></div>
+      <div class="full"><label for="f-conclusion">Conclusion <span class="hint">(bold, after the variant descriptions)</span></label>
+        <textarea id="f-conclusion" data-f="conclusion" placeholder="e.g. While this variant is an established variant …, its relevance to the indication for testing in this patient is uncertain."></textarea></div>
+      <div class="full"><label for="f-mito">Mitochondrial genome analysis</label>
+        <input type="text" id="f-mito" data-f="mito"></div>
+      <div class="full"><label for="f-recommendations">Recommendations</label>
+        <textarea id="f-recommendations" data-f="recommendations" placeholder="Blank = no Recommendations section"></textarea></div>
+      <div class="full"><label for="f-signatory">Signed by</label>
+        <textarea id="f-signatory" data-f="signatory" style="min-height:52px" placeholder="Dr. Name&#10;Designation   (blank = &quot;Dr.&quot; left to fill)"></textarea></div>
+    </div>
+  </div>
+</section>
+
+<section id="preview">
+  <div id="preview-bar">
+    <button class="btn small" id="refresh">Refresh preview</button>
+    <span id="preview-status">Preview appears here.</span>
+  </div>
+  <div id="pages"></div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const $$ = sel => [...document.querySelectorAll(sel)];
+const STATE_KEY = 'cyto_form_state';
+const G = { variants: [], current: -1, init: null, previewSeq: 0, timer: null };
+
+function toast(msg, ms = 3000) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------------- data ----------------
+function collectData() {
+  const patient = {};
+  $$('[data-p]').forEach(el => patient[el.dataset.p] = el.value.trim());
+  const data = { patient, variants: G.variants };
+  $$('[data-f]').forEach(el => data[el.dataset.f] = el.value.trim());
+  return data;
+}
+
+function applyData(d) {
+  d = d || {};
+  const p = d.patient || {};
+  $$('[data-p]').forEach(el => el.value = p[el.dataset.p] || '');
+  $$('[data-f]').forEach(el => el.value = d[el.dataset.f] || '');
+  if (!$('p-report_date').value && G.init) $('p-report_date').value = G.init.today;
+  G.variants = d.variants || [];
+  G.current = -1;
+  renderVariants();
+}
+
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(collectData())); } catch (e) {}
+}
+function loadState() {
+  try { const raw = localStorage.getItem(STATE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+// ---------------- variants ----------------
+function classKind(c) {
+  c = (c || '').toLowerCase();
+  if (c.includes('uncertain') || c.startsWith('vus')) return 'vus';
+  if (c.startsWith('likely pathogenic')) return 'lp';
+  if (c.startsWith('pathogenic')) return 'p';
+  return '';
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+const FINDING_LABEL = { secondary: 'Secondary', incidental: 'Incidental' };
+function geneCell(v) {
+  const f = FINDING_LABEL[v.finding];
+  return `<span class="gene">${esc(v.gene || '—')}</span>` + (f ? ` <span class="tag">${f}</span>` : '');
+}
+
+function renderVariants() {
+  const box = $('vlist'), body = box.querySelector('tbody');
+  box.style.display = G.variants.length ? 'block' : 'none';
+  body.innerHTML = G.variants.map((v, i) => `
+    <tr class="row${v.selected ? ' ticked' : ''}${i === G.current ? ' current' : ''}" data-i="${i}">
+      <td><input type="checkbox" data-tick="${i}" ${v.selected ? 'checked' : ''}></td>
+      <td>${geneCell(v)}</td>
+      <td>${esc([v.variant, v.protein].filter(Boolean).join(' / ') || '—')}</td>
+      <td>${esc(v.zygosity || '')}</td>
+      <td><span class="tag ${classKind(v.classification)}">${esc(v.classification || '—')}</span></td>
+    </tr>`).join('');
+  showEditor();
+}
+
+function showEditor() {
+  const ed = $('veditor'), v = G.variants[G.current];
+  if (!v) { ed.style.display = 'none'; return; }
+  ed.style.display = 'block';
+  $('ve-title').innerHTML = `<span class="gene">${esc(v.gene || 'New variant')}</span> ${esc(v.variant || '')}`;
+  $$('[data-v]').forEach(el => {
+    el.value = v[el.dataset.v] || '';
+    if (el.dataset.v === 'region') el.placeholder = v.region_default || 'Intron 14/22';
+    if (el.dataset.v === 'consequence') el.placeholder = v.consequence_default || 'Splice Donor Variant';
+  });
+  $('ve-selected').checked = !!v.selected;
+  const opts = [...new Set([...(v.class_options || []), ...(G.init ? G.init.classes : [])])];
+  $('class-list').innerHTML = opts.map(o => `<option value="${esc(o)}">`).join('');
+}
+
+async function uploadExcel(file) {
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  toast('Reading the Excel…');
+  try {
+    const r = await fetch('/api/upload-variants', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    if (G.variants.some(v => v.selected) && !confirm('Replace the current variant list (ticked variants included)?')) return;
+    G.variants = j.variants; G.current = -1;
+    renderVariants(); changed();
+    toast(`${j.variants.length} variant(s) listed — tick the ones to report.`);
+  } catch (e) { toast(`Could not read the Excel: ${e.message}`, 6000); }
+}
+
+// ---------------- preview ----------------
+function changed() {
+  saveState();
+  clearTimeout(G.timer);
+  G.timer = setTimeout(preview, 900);
+}
+
+async function preview() {
+  const seq = ++G.previewSeq;
+  const st = $('preview-status');
+  st.className = ''; st.textContent = 'Rendering preview…';
+  try {
+    const width = Math.round(Math.min($('pages').clientWidth - 36, 820) * (window.devicePixelRatio || 1));
+    const r = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: collectData(), width }) });
+    const j = await r.json();
+    if (seq !== G.previewSeq) return;            // a newer preview is on its way
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    const top = $('pages').scrollTop;
+    $('pages').innerHTML = j.pages.map((b, i) => `<img alt="Page ${i + 1}" src="data:image/png;base64,${b}">`).join('');
+    $('pages').scrollTop = top;
+    st.textContent = `Updated ${new Date().toLocaleTimeString()} — ${j.pages.length} page(s)`;
+  } catch (e) {
+    if (seq !== G.previewSeq) return;
+    st.className = 'err'; st.textContent = `Preview failed: ${e.message}`;
+  }
+}
+
+// ---------------- export / drafts ----------------
+async function exportReport(kind) {
+  const btn = $(`export-${kind}`); btn.disabled = true;
+  toast(kind === 'pdf' ? 'Making the PDF…' : 'Making the DOCX…');
+  try {
+    const r = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: collectData(), kind }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText); }
+    const blob = await r.blob();
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/) || cd.match(/filename="?([^";]+)"?/);
+    download(blob, m ? decodeURIComponent(m[1]) : `report.${kind}`);
+    toast('Saved to your Downloads folder.');
+  } catch (e) { toast(`Export failed: ${e.message}`, 6000); }
+  finally { btn.disabled = false; }
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function saveDraft() {
+  const d = collectData();
+  const name = (d.patient.name || 'report').replace(/[^A-Za-z0-9-]+/g, '_').replace(/^_|_$/g, '');
+  download(new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' }), `${name}_cyto_draft.json`);
+}
+
+async function loadDraft(file) {
+  if (!file) return;
+  try { applyData(JSON.parse(await file.text())); changed(); toast('Draft loaded.'); }
+  catch (e) { toast(`Could not load the draft: ${e.message}`, 5000); }
+}
+
+// ---------------- wiring ----------------
+async function start() {
+  try { G.init = await (await fetch('/api/init')).json(); } catch (e) { G.init = { today: '', samples: [], classes: [] }; }
+  $('sample-list').innerHTML = G.init.samples.map(s => `<option value="${esc(s)}">`).join('');
+  $('f-mito').placeholder = G.init.mito_default || '';
+  $('f-summary').placeholder = 'Blank = built from the ticked variants. With none ticked: "' + (G.init.no_variant_summary || '') + '"';
+  applyData(loadState() || {});
+
+  $('form').addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.v !== undefined && G.variants[G.current]) {
+      G.variants[G.current][el.dataset.v] = el.value;
+      const row = $('vlist').querySelector(`tr[data-i="${G.current}"]`);
+      if (row) {
+        const v = G.variants[G.current];
+        row.children[1].innerHTML = geneCell(v);
+        row.children[2].textContent = [v.variant, v.protein].filter(Boolean).join(' / ') || '—';
+        row.children[3].textContent = v.zygosity || '';
+        row.children[4].innerHTML = `<span class="tag ${classKind(v.classification)}">${esc(v.classification || '—')}</span>`;
+      }
+    }
+    if (el.type !== 'file') changed();
+  });
+
+  $('vlist').addEventListener('click', e => {
+    const tick = e.target.dataset.tick;
+    if (tick !== undefined) {
+      G.variants[+tick].selected = e.target.checked;
+      if (+tick === G.current) $('ve-selected').checked = e.target.checked;
+      e.target.closest('tr').classList.toggle('ticked', e.target.checked);
+      changed(); return;
+    }
+    const row = e.target.closest('tr.row');
+    if (row) { G.current = +row.dataset.i; renderVariants(); $('veditor').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  });
+  $('ve-selected').addEventListener('change', e => { G.variants[G.current].selected = e.target.checked; renderVariants(); changed(); });
+  $('ve-close').addEventListener('click', () => { G.current = -1; renderVariants(); });
+  $('ve-delete').addEventListener('click', () => {
+    if (!confirm('Remove this variant from the list?')) return;
+    G.variants.splice(G.current, 1); G.current = -1; renderVariants(); changed();
+  });
+  $('add-variant').addEventListener('click', () => {
+    G.variants.push({ gene: '', variant: '', protein: '', nm_id: '', zygosity: 'Heterozygous', classification: '',
+      disease: '', inheritance: '', omim_phenotype: '', evidence: '', genomic_position: '', region: '',
+      consequence: '', gene_name: '', hgnc: '', criteria: '', finding: '', selected: true, manual: true });
+    G.current = G.variants.length - 1; renderVariants(); changed();
+  });
+
+  const drop = $('drop');
+  drop.addEventListener('click', () => $('xlsx').click());
+  $('xlsx').addEventListener('change', e => { uploadExcel(e.target.files[0]); e.target.value = ''; });
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); uploadExcel(e.dataTransfer.files[0]); });
+
+  $('refresh').addEventListener('click', preview);
+  $('export-docx').addEventListener('click', () => exportReport('docx'));
+  $('export-pdf').addEventListener('click', () => exportReport('pdf'));
+  $('save-draft').addEventListener('click', saveDraft);
+  $('load-draft').addEventListener('change', e => { loadDraft(e.target.files[0]); e.target.value = ''; });
+  $('new-btn').addEventListener('click', () => {
+    if (!confirm('Clear the whole form for a new report?')) return;
+    applyData({}); changed();
+  });
+  preview();
+}
+start();
+</script>
+</body>
+</html>

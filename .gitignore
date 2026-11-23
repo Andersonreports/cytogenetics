@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+.venv/
+*.tmp
+.~lock.*#
+
+# PyInstaller output - the .exe is a release artifact, not source
+build/
+dist/
+
+# Patient reports, drafts and variant workbooks contain patient data:
+# keep them local, never commit.
+/inputs/
+/out/
+*_draft.json
+*.doc
+*.docx
+*.pdf
+*.xlsx
+*.xlsm
+
+# ...except the report template the renderer fills
+!app/templates/*.docx
+
+# OMIM data: licensed, not for redistribution; copy into app/data/ locally
+app/data/omim_*.txt

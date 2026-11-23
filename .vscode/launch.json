@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run the tool (this PC)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Run the tool (LAN)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.main",
+      "args": ["--lan"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": ["discover", "-s", "tests", "-v"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    }
+  ]
+}
