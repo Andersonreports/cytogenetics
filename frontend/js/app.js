@@ -127,6 +127,13 @@ function showEditor() {
   if (!v) { ed.style.display = 'none'; return; }
   ed.style.display = 'block';
   $('ve-title').innerHTML = editorStatus(v);
+  // Classification dropdown: the lab's classifications, plus the variant's own value
+  // (e.g. from the Excel) when it is none of them.
+  const cur = (v.classification || '').trim();
+  const opts = [...new Set([...(G.init ? G.init.classes : []), ...(v.class_options || [])])];
+  if (cur && !opts.includes(cur)) opts.unshift(cur);
+  $('class-select').innerHTML = (cur ? '' : '<option value="">— Select —</option>')
+    + opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
   $$('[data-v]').forEach(el => {
     el.value = v[el.dataset.v] || '';
     if (el.dataset.v === 'region') el.placeholder = v.region_default || 'Intron 14/22';
@@ -136,8 +143,6 @@ function showEditor() {
   vEdited(v);
   $('rich').innerHTML = textToRich(v.description);
   showVAutoState();
-  const opts = [...new Set([...(v.class_options || []), ...(G.init ? G.init.classes : [])])];
-  $('class-list').innerHTML = opts.map(o => `<option value="${esc(o)}">`).join('');
 }
 
 async function uploadExcel(file) {
