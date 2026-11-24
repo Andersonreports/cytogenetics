@@ -68,8 +68,67 @@ function applyKind(kind) {
 }
 
 
+// A CNV's genomic HGVS and size, built like the report does (backend renderer.cnv_hgvs /
+// cnv_size) from Chromosome, Start, End and Loss / Gain unless typed in.
+const NC38 = { 1: 'NC_000001.11', 2: 'NC_000002.12', 3: 'NC_000003.12', 4: 'NC_000004.12', 5: 'NC_000005.10',
+  6: 'NC_000006.12', 7: 'NC_000007.14', 8: 'NC_000008.11', 9: 'NC_000009.12', 10: 'NC_000010.11',
+  11: 'NC_000011.10', 12: 'NC_000012.12', 13: 'NC_000013.11', 14: 'NC_000014.9', 15: 'NC_000015.10',
+  16: 'NC_000016.10', 17: 'NC_000017.11', 18: 'NC_000018.10', 19: 'NC_000019.10', 20: 'NC_000020.11',
+  21: 'NC_000021.9', 22: 'NC_000022.11', X: 'NC_000023.11', Y: 'NC_000024.10' };
+const cnvInt = s => { const t = String(s || '').replace(/[,\s]/g, ''); return /^\d+$/.test(t) ? +t : 0; };
+function cnvChange(v) {
+  const t = (v.cnv_type || '').trim().toLowerCase();
+  if (/^(loss|del)/.test(t)) return 'Loss';
+  if (/^(gain|dup)/.test(t)) return 'Gain';
+  return '';
+}
+function cnvBuilt(v) {
+  const c = String(v.cnv_chrom || (v.chrom_pos || '').split(':')[0] || '').trim().replace(/^chr/i, '').toUpperCase();
+  const nc = NC38[{ 23: 'X', 24: 'Y' }[c] || c], a = cnvInt(v.cnv_start), b = cnvInt(v.cnv_end), ch = cnvChange(v);
+  return nc && a && b && ch ? `${nc}:g.(?_${a})_(${b}_?)${ch === 'Loss' ? 'del' : 'dup'}` : '';
+}
+function cnvHgvs(v) {
+  if ((v.cnv_hgvs || '').trim()) return v.cnv_hgvs.trim();
+  if (/^(NC_|chr|g\.)/i.test((v.variant || '').trim())) return v.variant.trim();
+  return cnvBuilt(v);
+}
+function cnvSize(v) {
+  const a = cnvInt(v.cnv_start), b = cnvInt(v.cnv_end);
+  if (!a || !b || b < a) return '';
+  const n = b - a + 1;
+  return n >= 1e6 ? `${(n / 1e6).toFixed(2)} Mb` : n >= 1000 ? `${(n / 1e3).toFixed(2)} kb` : `${n} bp`;
+}
+function showCnvAuto(v) {
+  if (!v || v.kind !== 'cnv') return;
+  const hasOld = !(v.cnv_hgvs || '').trim() && /^(NC_|chr|g\.)/i.test((v.variant || '').trim());
+  $('cnv-hgvs').placeholder = cnvBuilt(v) || (hasOld ? v.variant.trim()
+    : 'fill Chromosome, Loss / Gain, Start and End');
+  $('cnv-size').placeholder = cnvSize(v) || 'e.g. 93.73 kb';
+  // A typed HGVS replaces the built one in the report: warn when it is not a genomic HGVS.
+  const own = (v.cnv_hgvs || '').trim(), w = $('cnv-hgvs-warn');
+  const bad = own && !/(^|:)g\./.test(own);
+  w.style.display = bad ? '' : 'none';
+  w.textContent = bad ? `"${own}" is not a genomic HGVS (NC_…:g.…), but the report prints it as typed. `
+    + 'Clear this box to use the one built from Chromosome, Loss / Gain, Start and End.' : '';
+  const xc = (v.chrom_pos || '').split(':')[0].replace(/^chr/i, '').trim();
+  $('cnv-chrom').placeholder = xc ? `${xc} (from the Excel)` : 'e.g. X';
+}
+
+// Zygosity dropdown: the states for the variant's type; the Excel's HET / HOM / HEMI
+// shown as the full word, and any other value kept as an extra option.
+const ZYG_SHORT = { HET: 'Heterozygous', HOM: 'Homozygous', HEMI: 'Hemizygous' };
+function fillZygosity(v) {
+  const opts = v.kind === 'mito' ? ['Heteroplasmy', 'Homoplasmy'] : ['Heterozygous', 'Homozygous', 'Hemizygous'];
+  const raw = (v.zygosity || '').trim(), cur = ZYG_SHORT[raw.toUpperCase()] || raw;
+  if (cur !== raw) v.zygosity = cur;
+  if (cur && !opts.includes(cur)) opts.push(cur);
+  $('zyg-select').innerHTML = (cur ? '' : '<option value="">— Select —</option>')
+    + opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  $('zyg-select').value = cur;
+}
+
 function variantText(v) {
-  if (v.kind === 'cnv') return v.variant || '—';
+  if (v.kind === 'cnv') return cnvHgvs(v) || 'CNV';
   return [v.variant, v.protein].filter(Boolean).join(' / ') || '—';
 }
 
@@ -78,7 +137,7 @@ function variantText(v) {
 function itemHtml(v) {
   const k = KIND_LABEL[v.kind];
   const f = v.kind === 'mito' ? '' : FINDING_LABEL[v.finding];
-  return `<span class="vitem-label"><span class="gene">${esc(v.gene || '—')}</span>${esc(v.variant || '')}</span>`
+  return `<span class="vitem-label"><span class="gene">${esc(v.gene || '—')}</span>${esc(v.kind === 'cnv' ? cnvHgvs(v) : (v.variant || ''))}</span>`
     + (k ? `<span class="tag">${k}</span>` : '') + (f ? `<span class="tag">${f}</span>` : '');
 }
 
@@ -139,7 +198,11 @@ function showEditor() {
     if (el.dataset.v === 'region') el.placeholder = v.region_default || 'Intron 14/22';
     if (el.dataset.v === 'consequence') el.placeholder = v.consequence_default || 'Splice Donor Variant';
   });
+  v.cnv_type = cnvChange(v) || (v.cnv_type || '');
+  $$('[data-v="cnv_type"]').forEach(el => el.value = cnvChange(v));
+  fillZygosity(v);
   applyKind(v.kind);
+  showCnvAuto(v);
   vEdited(v);
   $('rich').innerHTML = textToRich(v.description);
   showVAutoState();
@@ -441,6 +504,7 @@ async function start() {
       v[el.dataset.v] = el.value;
       refreshItem(G.current);
       $('ve-title').innerHTML = editorStatus(v);
+      showCnvAuto(v);
     }
     if (el.dataset.v === 'kind') showEditor();
     const f = el.dataset.f;
@@ -531,7 +595,7 @@ async function start() {
     G.variants.push({ gene: '', variant: '', protein: '', nm_id: '', zygosity: 'Heterozygous', classification: '',
       disease: '', inheritance: '', omim_phenotype: '', evidence: '', genomic_position: '', region: '',
       consequence: '', gene_name: '', hgnc: '', criteria: '', finding: '', kind: '', statement: '', size: '',
-      cnv_type: '', segment_genes: '', heteroplasmy: '', dna_source: '', selected: true, manual: true });
+      cnv_type: '', cnv_chrom: '', cnv_start: '', cnv_end: '', cnv_hgvs: '', segment_genes: '', heteroplasmy: '', dna_source: '', selected: true, manual: true });
     G.current = G.variants.length - 1; $('vsearch').value = ''; renderVariants(); changed();
   }));
 

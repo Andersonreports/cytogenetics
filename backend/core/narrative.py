@@ -93,15 +93,13 @@ def _chromosome(hgvs: str) -> str:
 
 
 def _cnv_description(v: dict) -> str:
-    hgvs = v.get("variant", "")
-    change = ("loss" if re.search(r"del", hgvs) else "gain" if re.search(r"dup|\[\d\]", hgvs)
-              else "change")
-    typ = (v.get("cnv_type", "").strip().lower() or "")
-    change = {"loss": "loss", "gain": "gain"}.get(typ, change)
+    from .renderer import cnv_hgvs, cnv_change, cnv_size, _cnv_chrom
+    hgvs = cnv_hgvs(v)
+    change = cnv_change(dict(v, cnv_hgvs=hgvs)).lower() or "change"
     zyg = vr.allele_status(v).strip().lower()
     zyg = f"{zyg} " if zyg and zyg != "-" else ""
-    size = v.get("size", "").strip()
-    chrom = _chromosome(hgvs)
+    size = cnv_size(v)
+    chrom = _cnv_chrom(v) or _chromosome(hgvs)
     text = f"A {zyg}copy number {change}" + (f" of ~{size}" if size else "")
     text += f" is observed on chromosome {chrom}" if chrom else " is observed"
     gene = v.get("gene", "").strip()

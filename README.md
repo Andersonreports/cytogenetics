@@ -63,7 +63,10 @@ The form is in three steps (tabs at the top, as in the CMC report automation too
    * *Sequence variant* (default): the table above.
    * *Copy number variant*: its own table (Variant | Zygosity | Size | Disease |
      Inheritance | ACMG/ClinGen classification) and description after the block's
-     sequence variants, headed "(CNV)" (and those "(SNV)" when a block has both). A
+     sequence variants, headed "(CNV)" (and those "(SNV)" when a block has both). Its
+     Variant cell is the genomic HGVS, built from *Chromosome*, *Loss / Gain*, *Start*
+     and *End* (GRCh38) as `NC_000023.11:g.(?_31874949)_(31968677_?)del`, and the Size
+     from Start / End, unless typed in. A c. value is never shown for a CNV. A
      *Genes in the involved segment* list adds the "Table showing all genes in the
      involved segment" (Region | Gain/Loss | Size | genes) above the signature.
    * *Mitochondrial variant* (chrM rows of the Excel start as this): the

@@ -54,6 +54,7 @@ input[type=text],textarea,select{width:100%;border:1.5px solid var(--line);borde
 input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,138,.13)}
 textarea{resize:vertical;min-height:64px}
 .hint{font-size:12px;color:var(--muted);margin:2px 0 0}
+.warn{font-size:12px;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:5px 8px;margin-top:5px}
 /* Variants step, as in the CMC report automation tool: drop zone + search, then the
    gene list (left) and the selected variant's editor (right) once variants are loaded. */
 .variants-top{display:flex;gap:8px;align-items:center}

@@ -133,21 +133,45 @@ def docx_to_pdf(docx_path: str, out_dir: str) -> str:
     pdf_path = os.path.join(out_dir, Path(docx_path).stem + ".pdf")
     if os.path.exists(pdf_path):
         os.remove(pdf_path)
+    word_problem = ""
     if os.name == "nt":
         try:
             _via_word(docx_path, pdf_path)
             if os.path.exists(pdf_path):
                 return pdf_path
-        except Exception:  # noqa: BLE001 - fall back to LibreOffice
-            pass
+            word_problem = "Microsoft Word ran but did not write the PDF"
+        except Exception as e:  # noqa: BLE001 - fall back to LibreOffice
+            word_problem = _word_problem(e)
+            print(f"[PDF] {word_problem}")
     soffice = find_soffice()
     if soffice:
         _via_libreoffice(soffice, docx_path, out_dir)
-    elif os.name != "nt":
-        raise PdfError("No PDF converter found: install LibreOffice.")
-    if not os.path.exists(pdf_path):
-        raise PdfError("PDF was not produced (is Microsoft Word or LibreOffice installed?).")
-    return pdf_path
+        if os.path.exists(pdf_path):
+            return pdf_path
+        raise PdfError(f"LibreOffice ({soffice}) did not produce the PDF."
+                       + (f" {word_problem}." if word_problem else ""))
+    if os.name != "nt":
+        raise PdfError(f"No PDF converter found: install LibreOffice ({LO_HINT}).")
+    raise PdfError(f"{word_problem or 'Microsoft Word could not make the PDF'}, and LibreOffice is not "
+                   f"installed. Install LibreOffice (free, {LO_HINT}) and restart the tool; DOCX export "
+                   "works without it.")
+
+
+LO_HINT = "https://www.libreoffice.org/download/"
+
+
+def _word_problem(e: Exception) -> str:
+    """Why Word could not make the PDF, in words the user can act on."""
+    text = str(e)
+    cause = e.__cause__ or e
+    codes = {getattr(cause, "hresult", None)} | set(getattr(cause, "args", ())[:1])
+    if -2147221005 in codes or "Invalid class string" in text:      # CO_E_CLASSSTRING
+        return "Microsoft Word is not installed on this PC"
+    if -2147221164 in codes or "Class not registered" in text:      # REGDB_E_CLASSNOTREG
+        return "Microsoft Word is not set up for other programs on this PC (Office web / Store version?)"
+    if "No PDF converter" in text:
+        return "Microsoft Word cannot be used from this program"
+    return f"Microsoft Word could not make the PDF ({text})"
 
 
 def pdf_pages_png(pdf_path: str, width: int = 900) -> list[str]:

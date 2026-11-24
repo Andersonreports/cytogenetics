@@ -604,14 +604,66 @@ def _gene_cell(v: dict) -> list[list[tuple]]:
     return cell
 
 
+# ---------------------------------------------------------------------------
+# Copy number variants: the table shows the genomic HGVS
+# 'NC_000023.11:g.(?_31874949)_(31968677_?)del', built from Chromosome / Start / End and
+# Loss / Gain unless typed in the HGVS box. A c. value is never shown for a CNV.
+def _cnv_chrom(v: dict) -> str:
+    c = str(v.get("cnv_chrom", "")).strip() or v.get("chrom_pos", "").partition(":")[0].strip()
+    c = re.sub(r"^chr", "", c, flags=re.I).upper()
+    return {"23": "X", "24": "Y"}.get(c, c)
+
+
+def _cnv_int(v: dict, key: str) -> int | None:
+    t = re.sub(r"[,\s]", "", str(v.get(key, "")))
+    return int(t) if t.isdigit() else None
+
+
+def cnv_change(v: dict) -> str:
+    """'Loss', 'Gain' or '' (from the Loss / Gain box, else del / dup in the HGVS)."""
+    t = v.get("cnv_type", "").strip().lower()
+    if t.startswith(("loss", "del")):
+        return "Loss"
+    if t.startswith(("gain", "dup")):
+        return "Gain"
+    h = (v.get("cnv_hgvs", "") or "").strip()
+    return "Loss" if re.search(r"del", h) else "Gain" if re.search(r"dup|\[\d\]", h) else ""
+
+
+def cnv_hgvs(v: dict) -> str:
+    own = (v.get("cnv_hgvs", "") or "").strip()
+    if own:
+        return own
+    old = v.get("variant", "").strip()          # drafts from before: HGVS typed in 'variant'
+    if re.match(r"(NC_|chr|g\.)", old, re.I):
+        return old
+    nc = vr.NC_GRCH38.get(_cnv_chrom(v), "")
+    start, end, change = _cnv_int(v, "cnv_start"), _cnv_int(v, "cnv_end"), cnv_change(v)
+    if not (nc and start and end and change):
+        return ""
+    return f"{nc}:g.(?_{start})_({end}_?){'del' if change == 'Loss' else 'dup'}"
+
+
+def cnv_size(v: dict) -> str:
+    """The Size box, else End - Start + 1 in kb / Mb ('93.73 kb')."""
+    own = v.get("size", "").strip()
+    if own:
+        return own
+    start, end = _cnv_int(v, "cnv_start"), _cnv_int(v, "cnv_end")
+    if not (start and end and end >= start):
+        return ""
+    n = end - start + 1
+    return f"{n / 1e6:.2f} Mb" if n >= 1e6 else f"{n / 1e3:.2f} kb" if n >= 1000 else f"{n} bp"
+
+
 def _cnv_rows(chosen: list[dict]) -> list:
     rows = []
     for v in chosen:
         diseases = [d.strip() for d in v.get("disease", "").split(";") if d.strip()] or ["-"]
         rows.append([
-            [_plain(v.get("variant", "").strip() or "-")],
+            [_plain(cnv_hgvs(v) or "-")],
             [_plain(vr.allele_status(v))],
-            [_plain(v.get("size", "").strip() or "-")],
+            [_plain(cnv_size(v) or "-")],
             sum(([_plain(_no_break_linked(d)), []] for d in diseases), [])[:-1],
             _inheritance_lines(v),
             _class_lines(v),
@@ -652,11 +704,10 @@ def _mito_rows(chosen: list[dict]) -> list:
 def _segment_rows(chosen: list[dict]) -> list:
     rows = []
     for v in chosen:
-        hgvs = v.get("variant", "").strip()
-        typ = v.get("cnv_type", "").strip() or (
-            "Loss" if re.search(r"del\b|del$", hgvs) else "Gain" if re.search(r"dup|\[\d\]", hgvs) else "-")
+        hgvs = cnv_hgvs(v)
+        typ = cnv_change(dict(v, cnv_hgvs=hgvs)) or "-"
         genes = ", ".join(g.strip() for g in re.split(r"[,;\n]+", v.get("segment_genes", "")) if g.strip())
-        rows.append([[_plain(hgvs or "-")], [_plain(typ)], [_plain(v.get("size", "").strip() or "-")],
+        rows.append([[_plain(hgvs or "-")], [_plain(typ)], [_plain(cnv_size(v) or "-")],
                      [_plain(genes)]])
     return rows
 
@@ -741,7 +792,7 @@ def _title(v: dict, many: bool):
     if k == "cnv":
         if not many:
             return None
-        return [("Variant ", True, False, False), (v.get("variant", "").strip(), True, False, False)]
+        return [("Variant ", True, False, False), (cnv_hgvs(v) or "-", True, False, False)]
     if k == "mito":
         ident = _mito_ids(v, False)
     else:

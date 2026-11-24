@@ -202,6 +202,18 @@ class CnvMitoTests(unittest.TestCase):
         self.assertEqual(seg[1][1:], ["Loss", "93.73 kb", "DMD"])
         self.assertLess(texts.index("Table showing all genes in the involved segment:"), next(i for i, t in enumerate(texts) if t.startswith("Dr. B")))
 
+    def test_cnv_built_from_coordinates(self):
+        """A row switched to CNV keeps its c. value; the table shows the genomic HGVS
+        built from Chromosome / Start / End / Loss instead, and the size from them."""
+        v = dict(CNV, variant="c.*107A>C", size="", cnv_chrom="X", cnv_start="31,874,949",
+                 cnv_end="31968677", cnv_type="Loss")
+        doc = render_report(RenderTests().data([v]))
+        rows = _table_text(doc, "VARIANT")
+        self.assertEqual(rows[1][:3], [CNV["variant"], "Hemizygous", "93.73 kb"])
+        self.assertNotIn("c.*107A>C", " ".join(_texts(doc)))
+        no_coords = render_report(RenderTests().data([dict(CNV, variant="c.*107A>C")]))
+        self.assertEqual(_table_text(no_coords, "VARIANT")[1][0], "-")
+
     def test_snv_and_cnv(self):
         texts = [t.strip() for t in _texts(render_report(RenderTests().data([dict(VARIANT), dict(CNV)])))]
         order = ["Table detailing primary finding (SNV):", "Description of primary finding (SNV):",

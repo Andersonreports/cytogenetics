@@ -96,18 +96,19 @@
         <div data-for="snv mito"><label>HGNC ID <span class="hint">(optional)</span></label><input type="text" data-v="hgnc" placeholder="e.g. 3012"></div>
         <div data-for="snv"><label>Transcript (NM)</label><input type="text" data-v="nm_id" placeholder="NM_000110.4"></div>
         <div data-for="snv mito"><label data-l-mito="m. change">c. change</label><input type="text" data-v="variant" placeholder="c.1905+1G>A" data-ph-mito="m.4296G>A"></div>
-        <div data-for="cnv" class="full"><label>Variant (HGVS)</label><input type="text" data-v="variant" placeholder="NC_000023.11:g.(?_31874949)_(31968677_?)del"></div>
+        <div data-for="cnv"><label>Chromosome</label><input type="text" data-v="cnv_chrom" id="cnv-chrom" placeholder="X"></div>
+        <div data-for="cnv"><label>Loss / Gain</label><select data-v="cnv_type"><option value="">— Select —</option><option value="Loss">Loss (del)</option><option value="Gain">Gain (dup)</option></select></div>
+        <div data-for="cnv"><label>Start <span class="hint">(GRCh38)</span></label><input type="text" data-v="cnv_start" placeholder="e.g. 31874949"></div>
+        <div data-for="cnv"><label>End <span class="hint">(GRCh38)</span></label><input type="text" data-v="cnv_end" placeholder="e.g. 31968677"></div>
+        <div data-for="cnv" class="full"><label>Variant (HGVS) <span class="hint" id="cnv-hgvs-hint">(built from the boxes above; type here to change it)</span></label><input type="text" data-v="cnv_hgvs" id="cnv-hgvs" placeholder="NC_000023.11:g.(?_31874949)_(31968677_?)del"><div class="warn" id="cnv-hgvs-warn" style="display:none"></div></div>
         <div data-for="snv"><label>p. change (with NP_ if wanted)</label><input type="text" data-v="protein" placeholder="NP_000101.2:p.(?)"></div>
         <div data-for="snv" class="full"><label>Genomic position</label><input type="text" data-v="genomic_position" placeholder="NC_000001.11:g.97450058C>T"></div>
         <div data-for="snv"><label>Location</label><input type="text" data-v="region" placeholder="Intron 14/22"></div>
         <div data-for="snv"><label>Consequence</label><input type="text" data-v="consequence" placeholder="Splice Donor Variant"></div>
-        <div data-for="cnv"><label>Size</label><input type="text" data-v="size" placeholder="93.73 kb"></div>
-        <div data-for="cnv"><label>Gain / Loss <span class="hint">(gene list table)</span></label><input type="text" data-v="cnv_type" list="cnvtype-list" placeholder="blank = from del / dup">
-          <datalist id="cnvtype-list"><option value="Loss"><option value="Gain"></datalist></div>
+        <div data-for="cnv"><label>Size <span class="hint">(blank = from Start / End)</span></label><input type="text" data-v="size" id="cnv-size" placeholder="93.73 kb"></div>
         <div data-for="mito"><label>Heteroplasmy level (%)</label><input type="text" data-v="heteroplasmy" placeholder="80.46"></div>
         <div data-for="mito"><label>DNA source</label><input type="text" data-v="dna_source" placeholder="Blood"></div>
-        <div><label data-l-mito="Allele state">Zygosity</label><input type="text" data-v="zygosity" list="zyg-list" placeholder="HET / HOM / HEMI" data-ph-mito="Heteroplasmy / Homoplasmy">
-          <datalist id="zyg-list"><option value="Heterozygous"><option value="Homozygous"><option value="Hemizygous"><option value="Heteroplasmy"><option value="Homoplasmy"></datalist></div>
+        <div><label data-l-mito="Allele state">Zygosity</label><select data-v="zygosity" id="zyg-select"></select></div>
       </div>
       <div class="detail-title">Classification &amp; disease</div>
       <div class="grid">
