@@ -141,9 +141,19 @@ class ExtraBlockTests(unittest.TestCase):
         pos = [texts.index(t) for t in order]
         self.assertEqual(pos, sorted(pos))
         self.assertNotIn("Description of secondary finding:", texts)     # no text -> no description
-        self.assertIn("A pathogenic variant was identified in the HBB gene in a heterozygous state. "
-                      "A pathogenic variant was identified in the G6PD gene in a heterozygous state "
-                      "(see table below).", texts)
+        # One paragraph per incidental variant; one heterozygous pathogenic variant of an AR
+        # disease gets the carrier-state sentences.
+        hbb = next(t for t in texts if t.startswith("A pathogenic variant was identified in the HBB gene"))
+        self.assertEqual(hbb, "A pathogenic variant was identified in the HBB gene in a heterozygous state. "
+                              "This variant is associated with Dihydropyrimidine dehydrogenase deficiency, an "
+                              "autosomal recessive condition. This finding is unlikely to contribute to the "
+                              "patient’s clinical phenotype. As the variant is present in the heterozygous "
+                              "state, the patient is considered a carrier of dihydropyrimidine dehydrogenase "
+                              "deficiency and is not, in usual circumstances, expected to manifest clinical "
+                              "features of dihydropyrimidine dehydrogenase deficiency. This variant is being "
+                              "reported to facilitate appropriate carrier screening for family members and "
+                              "genetic counselling.")
+        self.assertTrue(any(t.startswith("A pathogenic variant was identified in the G6PD gene") for t in texts))
         doc = render_report(d)
         genes = [t.rows[1].cells[0].text.split("\n")[0] for t in doc.tables
                  if t.rows[0].cells[0].text.strip().upper().startswith("GENE")]
@@ -216,6 +226,109 @@ class CnvMitoTests(unittest.TestCase):
         self.assertEqual(cells[2], "Blood")
         self.assertEqual(cells[4], "Heteroplasmy\n(80.46%)")
         self.assertTrue(any("mitochondrial DNA variant interpretation" in t for t in texts))
+
+
+class DescriptionBoxTests(unittest.TestCase):
+    """The variant's one Description box: paragraphs and **bold** as typed."""
+
+    def test_bold_and_paragraphs(self):
+        v = dict(VARIANT, description="The DPYD gene encodes an enzyme.\n\n"
+                                      "**While this variant is established, its relevance is uncertain.**")
+        doc = render_report(RenderTests().data([v]))
+        paras = [p for p in doc.paragraphs if p.text.strip()]
+        i = next(k for k, p in enumerate(paras) if p.text.startswith("Variant NM_000110.4"))
+        self.assertEqual(paras[i + 1].text, "The DPYD gene encodes an enzyme.")
+        self.assertEqual(paras[i + 2].text, "While this variant is established, its relevance is uncertain.")
+        self.assertTrue(all(r.bold for r in paras[i + 2].runs if r.text.strip()))
+        self.assertFalse(any(r.bold for r in paras[i + 1].runs if r.text.strip()))
+        self.assertNotIn("**", "".join(p.text for p in paras))
+
+    def test_italic(self):
+        v = dict(VARIANT, description="Plain <i>italic words</i> and **bold <i>both</i>** end.")
+        doc = render_report(RenderTests().data([v]))
+        p = next(p for p in doc.paragraphs if p.text.startswith("Plain"))
+        self.assertEqual(p.text, "Plain italic words and bold both end.")
+        style = {r.text: (bool(r.bold), bool(r.italic)) for r in p.runs if r.text.strip()}
+        self.assertEqual(style["italic words"], (False, True))
+        self.assertEqual(style["both"], (True, True))
+        self.assertEqual(style["bold "], (True, False))
+        self.assertEqual(style["Plain "], (False, False))
+
+    def test_title_line_in_box(self):
+        """The box's own (edited) bold 'Variant ...' line replaces the built one."""
+        v = dict(VARIANT, description="**Variant NM_000110.4:c.1905+1G>A in DPYD gene (edited)**\n\nBody text.")
+        texts = [p.text.strip() for p in render_report(RenderTests().data([v])).paragraphs]
+        self.assertIn("Variant NM_000110.4:c.1905+1G>A in DPYD gene (edited)", texts)
+        self.assertNotIn("Variant NM_000110.4:c.1905+1G>A / NP_000101.2:p.(?) in DPYD gene", texts)
+        self.assertEqual(texts[texts.index("Variant NM_000110.4:c.1905+1G>A in DPYD gene (edited)") + 1],
+                         "Body text.")
+        # A box without the line still gets the built one.
+        texts = [p.text.strip() for p in render_report(RenderTests().data([dict(VARIANT, description="Only body.")])).paragraphs]
+        i = texts.index("Variant NM_000110.4:c.1905+1G>A / NP_000101.2:p.(?) in DPYD gene")
+        self.assertEqual(texts[i + 1], "Only body.")
+
+    def test_old_three_boxes_joined(self):
+        v = dict(VARIANT, statement="Classified as pathogenic.")
+        texts = [p.text for p in render_report(RenderTests().data([v])).paragraphs]
+        pos = [texts.index(t) for t in ("The DPYD gene encodes dihydropyrimidine dehydrogenase.",
+                                         "Second evidence paragraph.", "Classified as pathogenic.")]
+        self.assertEqual(pos, sorted(pos))
+
+
+class SummaryTests(unittest.TestCase):
+    """The generated Summary the form shows in its box (and the report prints)."""
+
+    def test_carrier_summary(self):
+        from backend.core.renderer import summary_default
+        self.assertEqual(summary_default([dict(VARIANT)]),
+                         "Whole exome analysis in this sample shows the following pathogenic variant in the DPYD "
+                         "gene that is associated with autosomal recessive dihydropyrimidine dehydrogenase "
+                         "deficiency (see table and description below). Note that causation of disease with "
+                         "respect to this condition requires bi-allelic disease causing variants. The presence "
+                         "of only one pathogenic variant as seen in this patient represents a carrier state.")
+
+    def test_variant_texts(self):
+        from backend.core import narrative
+        v = dict(VARIANT, gene="STS", gene_name="Steroid sulfatase", disease="Ichthyosis, X-linked",
+                 inheritance="XLR", region="Exon 8/10", consequence="Missense Variant",
+                 protein="NP_000342.3:p.Arg381Ser", gnomad_all="4.55453e-06", gnomad_sa="4",
+                 clinvar="Uncertain Significance", classification="Variant of Uncertain Significance")
+        t = {"omim_phenotype": narrative.description(v), "evidence": narrative.evidence(v),
+             "statement": narrative.statement(v)}
+        full = narrative.texts(v)["description"]
+        self.assertTrue(full.endswith("**Based on ACMG criteria, this variant is classified as a variant "
+                                      "of uncertain significance.**"))
+        self.assertTrue(t["omim_phenotype"].startswith("The STS gene encodes steroid sulfatase."))
+        self.assertIn("is associated with Ichthyosis, X-linked", t["omim_phenotype"])
+        self.assertIn("heterozygous missense variant in exon 8 (of 10), resulting in the substitution of "
+                      "Arginine with Serine at amino acid position 381", t["evidence"])
+        self.assertIn("allele frequency of 0.00046%, with 4 alleles in the South Asian population", t["evidence"])
+        self.assertIn("classified as of uncertain significance in the ClinVar database", t["evidence"])
+        self.assertEqual(t["statement"], "Based on ACMG criteria, this variant is classified as a variant "
+                                         "of uncertain significance.")
+
+    def test_secondary_and_no_variant_summaries(self):
+        from backend.core.renderer import block_summary_default, summary_default
+        g = dict(VARIANT, gene="G6PD", disease="Anemia, congenital nonspherocytic hemolytic, 1", inheritance="XLR")
+        self.assertEqual(block_summary_default([g], "secondary"),
+                         "A pathogenic variant in the G6PD gene was identified (see table below) in this sample. "
+                         "Pathogenic mutations in this gene cause anemia, congenital nonspherocytic hemolytic, 1. "
+                         "The contribution of this variant to the indication for testing in this patient is "
+                         "uncertain. However, this variant is being reported to facilitate appropriate "
+                         "management of the related condition.\n\n"
+                         "Further details are provided in the table and description below.")
+        self.assertTrue(summary_default([]).startswith(
+            "Whole exome and mitochondrial sequencing did not detect any pathogenic / likely pathogenic"))
+
+    def test_defaults_api(self):
+        from backend.server import app
+        data = RenderTests().data([dict(VARIANT), dict(VARIANT, gene="HBB", finding="incidental")]).to_dict()
+        j = app.test_client().post("/api/defaults", json={"data": data}).get_json()
+        self.assertTrue(j["summary"].startswith("Whole exome analysis in this sample shows the following "
+                                                "pathogenic variant in the DPYD gene"))
+        self.assertIn("HBB gene", j["incidental_summary"])
+        self.assertEqual(j["secondary_summary"], "")
+        self.assertEqual(j["mito"], MITO_DEFAULT)
 
 
 class RawExportTests(unittest.TestCase):

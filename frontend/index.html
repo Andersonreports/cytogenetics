@@ -10,7 +10,7 @@
 <header>
   <h1>CMC Cytogenetics Report</h1>
   <span class="sub">NGS-WES (Whole Exome &amp; Mitochondrial) · Department of Cytogenetics, CMC Vellore</span>
-  <button class="btn ghost" id="new-btn" title="Clear the form">New report</button>
+  <button class="btn ghost clear" id="clear-btn" title="Clear all form data and start a new report">Clear</button>
   <button class="btn ghost" id="save-draft">Save draft</button>
   <label class="btn ghost" style="margin:0;color:#fff">Load draft<input type="file" id="load-draft" accept=".json" hidden></label>
   <button class="btn" id="export-docx">Export DOCX</button>
@@ -19,7 +19,14 @@
 
 <main>
 <section id="form">
+  <div class="tabs-bar" aria-label="Report steps">
+    <button class="tab-btn active" data-tab="patient"><span class="step-num">1</span><span class="step-text"><span class="step-name">Patient &amp; sample</span><span class="step-sub">Not started</span></span></button>
+    <button class="tab-btn" data-tab="variants"><span class="step-num">2</span><span class="step-text"><span class="step-name">Variants</span><span class="step-sub">Not started</span></span></button>
+    <button class="tab-btn" data-tab="result"><span class="step-num">3</span><span class="step-text"><span class="step-name">Result text</span><span class="step-sub">Optional</span></span></button>
+  </div>
+  <div class="step-head"><h2 id="step-title">Patient &amp; sample</h2></div>
 
+  <div id="tab-patient" class="tab-panel active">
   <div class="card">
     <h2>Patient &amp; sample</h2>
     <div class="grid">
@@ -31,12 +38,11 @@
         <input type="text" id="p-sex" data-p="sex" list="sex-list" placeholder="Male / Female">
         <datalist id="sex-list"><option value="Male"><option value="Female"></datalist></div>
       <div><label for="p-sample">Sample</label>
-        <input type="text" id="p-sample" data-p="sample" list="sample-list" placeholder="Peripheral Blood">
-        <datalist id="sample-list"></datalist></div>
+        <input type="text" id="p-sample" data-p="sample" autocomplete="off"></div>
       <div><label for="p-referred_by">Referred by</label><input type="text" id="p-referred_by" data-p="referred_by" placeholder="Dr. …"></div>
-      <div><label for="p-received_date">Date of receipt</label><input type="text" id="p-received_date" data-p="received_date" placeholder="dd/mm/yyyy"></div>
+      <div><label for="p-received_date">Date of receipt</label><div class="date-wrap"><input type="text" id="p-received_date" data-p="received_date" placeholder="dd/mm/yyyy"><button class="date-btn" type="button" data-date-for="p-received_date" title="Pick a date" aria-label="Pick a date"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button><input type="date" class="date-pick" tabindex="-1" aria-hidden="true"></div></div>
       <div><label for="p-unit">Unit</label><input type="text" id="p-unit" data-p="unit"></div>
-      <div><label for="p-report_date">Date of report</label><input type="text" id="p-report_date" data-p="report_date" placeholder="dd/mm/yyyy"></div>
+      <div><label for="p-report_date">Date of report</label><div class="date-wrap"><input type="text" id="p-report_date" data-p="report_date" placeholder="dd/mm/yyyy"><button class="date-btn" type="button" data-date-for="p-report_date" title="Pick a date" aria-label="Pick a date"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button><input type="date" class="date-pick" tabindex="-1" aria-hidden="true"></div></div>
     </div>
   </div>
 
@@ -44,17 +50,40 @@
     <h2>Indication</h2>
     <textarea id="f-indication" data-f="indication" placeholder="Reason for testing / clinical features"></textarea>
   </div>
+  </div>
 
-  <div class="card">
-    <h2>Variants <span class="spacer"></span>
-      <button class="btn small" id="add-variant" title="Add a variant typed by hand">+ Add variant</button></h2>
-    <div id="drop">Click or drop the VarSeq <b>listed-variants Excel</b> (.xlsx) here
+  <div id="tab-variants" class="tab-panel">
+  <div class="variants-top">
+    <div id="drop">Click to browse or drag &amp; drop the VarSeq <b>listed-variants Excel</b> (.xlsx)
       <input type="file" id="xlsx" accept=".xlsx,.xlsm" hidden></div>
-    <p class="hint">Tick the variants to report. Each ticked variant gets a row in the findings table and a description (its OMIM phenotype and evidence text). Click a variant to choose its block — Primary, Secondary or Incidental finding (VarSeq's secondary findings start as Secondary). Set <b>Type of variant</b> for a CNV or a mitochondrial (mtDNA) variant: each gets its own table, as in the lab's reports. With no primary variant ticked, the report has no primary-finding table.</p>
-    <div id="vlist"><table><thead><tr><th style="width:34px"></th><th>Gene</th><th>Variant</th><th>Zygosity</th><th>Classification</th></tr></thead><tbody></tbody></table></div>
+    <input type="text" id="vsearch" placeholder="Search variants…" autocomplete="off">
+  </div>
+  <p class="vhint" id="vhint">Upload the listed-variants Excel, then tick the variants to show in the report.
+    <button class="linkbtn add-variant" type="button">Or add a variant by hand.</button></p>
 
+  <div class="variants-body" id="vbody">
+    <div class="vlist-col" id="vlist-col">
+      <div class="vlist-head">
+        <input type="checkbox" id="vall">
+        <label for="vall" id="vall-label">Select all (0 variants)</label>
+        <button class="vlist-toggle" id="vlist-toggle" type="button" title="Hide list">&#8249;</button>
+      </div>
+      <div id="vlist"></div>
+      <div class="vlist-foot"><button class="btn small add-variant" type="button" title="Add a variant typed by hand">+ Add variant</button></div>
+    </div>
+    <div class="vdetail-col">
+      <div class="vempty" id="vempty">Select a variant from the list to see its details.</div>
     <div id="veditor">
-      <h3 id="ve-title"></h3>
+      <div class="ve-status" id="ve-title"></div>
+      <div class="ve-report" data-for="snv cnv">
+        <label class="inline">Report in
+          <select data-v="finding">
+            <option value="">Primary finding</option>
+            <option value="secondary">Secondary finding</option>
+            <option value="incidental">Incidental finding</option>
+          </select></label>
+      </div>
+      <div class="detail-title">Variant</div>
       <div class="grid">
         <div class="full"><label>Type of variant</label>
           <select data-v="kind">
@@ -79,53 +108,62 @@
         <div data-for="mito"><label>DNA source</label><input type="text" data-v="dna_source" placeholder="Blood"></div>
         <div><label data-l-mito="Allele state">Zygosity</label><input type="text" data-v="zygosity" list="zyg-list" placeholder="HET / HOM / HEMI" data-ph-mito="Heteroplasmy / Homoplasmy">
           <datalist id="zyg-list"><option value="Heterozygous"><option value="Homozygous"><option value="Hemizygous"><option value="Heteroplasmy"><option value="Homoplasmy"></datalist></div>
+      </div>
+      <div class="detail-title">Classification &amp; disease</div>
+      <div class="grid">
         <div><label data-l-cnv="ACMG / ClinGen classification">ACMG classification</label><input type="text" data-v="classification" list="class-list">
           <datalist id="class-list"></datalist></div>
         <div class="full"><label>Disease (separate several with ;)</label><input type="text" data-v="disease"></div>
         <div><label>Inheritance (codes)</label><input type="text" data-v="inheritance" placeholder="AR / AD / XLR …"></div>
         <div><label data-l-cnv="ClinGen CNV criteria">ACMG attributes (criteria)</label><input type="text" data-v="criteria" placeholder="PVS1, PM2, PP4" data-ph-cnv="1A, 2A, 3A, 4B"></div>
         <div data-for="cnv" class="full"><label>Genes in the involved segment <span class="hint">(optional: adds the “Table showing all genes in the involved segment” above the signature)</span></label><textarea data-v="segment_genes" style="min-height:52px" placeholder="SCN2A, SCN3A, COBLL1, GRB14 …"></textarea></div>
-        <div class="full"><label>Description <span class="hint">(printed under the bold “Variant …” line)</span></label><textarea data-v="omim_phenotype" style="min-height:90px" placeholder="e.g. Ichthyosis, X-linked (OMIM#308100) is caused by mutation in the STS gene (OMIM*300747). …"></textarea></div>
-        <div class="full"><label>Variant evidence <span class="hint">(printed after the description)</span></label><textarea data-v="evidence" style="min-height:90px" placeholder="Type of variant, population frequency, literature / ClinVar reports …"></textarea>
-          <p class="hint">Leave a blank line between paragraphs.</p></div>
-        <div class="full"><label>Classification statement <span class="hint">(bold, after the evidence; blank = none)</span></label>
-          <textarea data-v="statement" style="min-height:52px" placeholder="e.g. Based on ACMG criteria, this variant is classified as Pathogenic."></textarea>
-          <p class="hint"><button class="btn small" type="button" id="ve-statement">Suggest from classification</button></p></div>
       </div>
+      <div class="detail-title">Description</div>
+      <div class="rich-wrap">
+        <div class="rich-bar">
+          <button class="rich-btn" type="button" id="rich-bold" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button class="rich-btn" type="button" id="rich-italic" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+          <span class="hint">Printed as typed here, from the bold “Variant …” line on. Enter = new paragraph.</span>
+          <span style="flex:1"></span>
+          <button class="linkbtn vrebuild" type="button" data-vrebuild="description" title="Replace with the text built from the variant's values">&#8635; Rebuild</button>
+        </div>
+        <div class="rich" id="rich" contenteditable="true" spellcheck="true"
+             data-placeholder="The gene's function and its disease, the variant observed, its frequency and literature / ClinVar reports, then the classification sentence …"></div>
+      </div>
+      <p class="hint" id="rich-hint"></p>
       <div class="row-actions">
-        <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="ve-selected"> Report this variant</label>
-        <label style="display:flex;align-items:center;gap:6px;margin:0" data-for="snv cnv">in
-          <select data-v="finding" style="width:auto">
-            <option value="">Primary finding</option>
-            <option value="secondary">Secondary finding</option>
-            <option value="incidental">Incidental finding</option>
-          </select></label>
         <span style="flex:1"></span>
-        <button class="btn small danger" id="ve-delete">Remove from list</button>
-        <button class="btn small" id="ve-close">Close</button>
+        <button class="btn small danger" id="ve-delete" type="button">Remove from list</button>
       </div>
     </div>
+    </div>
+  </div>
   </div>
 
+  <div id="tab-result" class="tab-panel">
   <div class="card">
     <h2>Result text</h2>
     <div class="grid">
-      <div class="full"><label for="f-summary">Summary</label>
-        <textarea id="f-summary" data-f="summary" style="min-height:90px"></textarea>
-        <p class="hint">Blank = a sentence built from the ticked primary variants (or the no-variant sentence).</p></div>
-      <div class="full"><label for="f-secondary_summary">Secondary finding — Summary <span class="hint">(used when a ticked variant is in the Secondary finding block)</span></label>
-        <textarea id="f-secondary_summary" data-f="secondary_summary" placeholder="Blank = &quot;A pathogenic variant was identified in the … gene in a heterozygous state (see table below).&quot;"></textarea></div>
-      <div class="full"><label for="f-incidental_summary">Incidental finding — Summary <span class="hint">(used when a ticked variant is in the Incidental finding block)</span></label>
-        <textarea id="f-incidental_summary" data-f="incidental_summary" placeholder="Blank = &quot;A pathogenic variant was identified in the … gene in a heterozygous state (see table below).&quot;"></textarea></div>
+      <div class="full" data-box="summary"><label for="f-summary">Summary <button class="linkbtn rebuild" type="button" data-rebuild="summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
+        <textarea id="f-summary" data-f="summary" style="min-height:150px"></textarea>
+        <p class="hint auto-hint" data-auto-hint="summary"></p></div>
+      <div class="full" data-box="secondary_summary"><label for="f-secondary_summary">Secondary finding — Summary <button class="linkbtn rebuild" type="button" data-rebuild="secondary_summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
+        <textarea id="f-secondary_summary" data-f="secondary_summary" style="min-height:90px"></textarea>
+        <p class="hint auto-hint" data-auto-hint="secondary_summary"></p></div>
+      <div class="full" data-box="incidental_summary"><label for="f-incidental_summary">Incidental finding — Summary <button class="linkbtn rebuild" type="button" data-rebuild="incidental_summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
+        <textarea id="f-incidental_summary" data-f="incidental_summary" style="min-height:90px"></textarea>
+        <p class="hint auto-hint" data-auto-hint="incidental_summary"></p></div>
       <div class="full"><label for="f-conclusion">Conclusion <span class="hint">(bold, after the variant descriptions)</span></label>
         <textarea id="f-conclusion" data-f="conclusion" placeholder="e.g. While this variant is an established variant …, its relevance to the indication for testing in this patient is uncertain."></textarea></div>
-      <div class="full"><label for="f-mito">Mitochondrial genome analysis <span class="hint">(with a ticked mitochondrial variant: its Summary; blank = built from the variant)</span></label>
-        <input type="text" id="f-mito" data-f="mito"></div>
+      <div class="full" data-box="mito"><label for="f-mito">Mitochondrial genome analysis <button class="linkbtn rebuild" type="button" data-rebuild="mito" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
+        <textarea id="f-mito" data-f="mito" style="min-height:52px"></textarea>
+        <p class="hint auto-hint" data-auto-hint="mito"></p></div>
       <div class="full"><label for="f-recommendations">Recommendations</label>
         <textarea id="f-recommendations" data-f="recommendations" placeholder="Blank = no Recommendations section"></textarea></div>
       <div class="full"><label for="f-signatory">Signed by</label>
-        <textarea id="f-signatory" data-f="signatory" style="min-height:52px" placeholder="Dr. Name&#10;Designation   (blank = &quot;Dr.&quot; left to fill)"></textarea></div>
+        <textarea id="f-signatory" data-f="signatory" style="min-height:52px" placeholder="Name (Dr. is added)&#10;Designation   (blank = &quot;Dr. ………&quot; dotted line, signed by hand)"></textarea></div>
     </div>
+  </div>
   </div>
 </section>
 

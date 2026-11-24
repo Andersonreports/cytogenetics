@@ -18,7 +18,26 @@ header .sub{opacity:.8;font-size:12px;margin-right:auto}
 .btn.danger{color:var(--danger);border-color:#e8a9a9}
 .btn:disabled{opacity:.55;cursor:default}
 main{flex:1;display:flex;min-height:0}
-#form{width:50%;min-width:420px;overflow-y:auto;padding:18px 22px 40px;display:flex;flex-direction:column;gap:16px}
+#form{width:50%;min-width:420px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface)}
+/* Steps (tabs), as in the CMC report automation tool */
+.tabs-bar{display:flex;background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;padding:0 8px}
+.tab-btn{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;padding:12px 10px 9px;border:none;background:transparent;cursor:pointer;font-family:inherit;text-align:left;border-bottom:3px solid transparent;transition:background .15s}
+.tab-btn:hover:not(.active){background:var(--surface-2)}
+.tab-btn.active{border-bottom-color:var(--accent);background:#f2f8fa}
+.tab-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.step-num{width:28px;height:28px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #b9c7d1;color:var(--muted);background:var(--surface)}
+.tab-btn.active .step-num{border-color:var(--accent);color:var(--accent)}
+.tab-btn.done .step-num{background:var(--accent);border-color:var(--accent);color:#fff}
+.step-text{display:flex;flex-direction:column;gap:1px;min-width:0}
+.step-name{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab-btn.active .step-name{color:var(--accent)}
+.step-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step-sub.partial{color:#b45309}
+.step-head{padding:18px 22px 0;flex-shrink:0;background:var(--bg)}
+.step-head h2{font-size:20px;font-weight:700;margin:0;letter-spacing:-.2px}
+.tab-panel{display:none;flex:1;overflow-y:auto;padding:14px 22px 30px;background:var(--bg)}
+.tab-panel.active{display:flex;flex-direction:column;gap:16px}
+.tab-panel>*{flex-shrink:0}
 #preview{flex:1;display:flex;flex-direction:column;border-left:1px solid var(--line);min-width:0;background:#e3e9ee}
 #preview-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
 #preview-status{font-size:12px;color:var(--muted)}
@@ -35,22 +54,67 @@ input[type=text],textarea,select{width:100%;border:1.5px solid var(--line);borde
 input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,138,.13)}
 textarea{resize:vertical;min-height:64px}
 .hint{font-size:12px;color:var(--muted);margin:2px 0 0}
-#drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2)}
+/* Variants step, as in the CMC report automation tool: drop zone + search, then the
+   gene list (left) and the selected variant's editor (right) once variants are loaded. */
+.variants-top{display:flex;gap:8px;align-items:center}
+#drop{flex:1;border:2px dashed var(--line);border-radius:var(--radius);padding:13px;text-align:center;color:var(--muted);cursor:pointer;background:var(--surface-2);font-size:13px}
 #drop.over{border-color:var(--accent);color:var(--accent);background:#eef6f8}
-#vlist{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:none}
-#vlist table{width:100%;border-collapse:collapse;font-size:13px}
-#vlist th{background:var(--surface-2);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--label);padding:6px 8px}
-#vlist td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}
-#vlist tr.row{cursor:pointer}
-#vlist tr.row:hover{background:#f3f8fa}
-#vlist tr.row.current{background:#e4f0f4}
-#vlist tr.row.ticked td:nth-child(2){font-weight:700}
+#vsearch{width:170px;flex:none}
+.vhint{font-size:12px;color:var(--muted);font-style:italic;margin:0}
+.vhint.loaded{color:#2f855a;font-style:normal}
+.linkbtn{border:none;background:none;padding:0;color:var(--accent);font:inherit;font-style:normal;cursor:pointer;text-decoration:underline}
+.variants-body{display:none;min-height:440px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.variants-body.show{display:flex}
+.vlist-col{width:34%;min-width:190px;border-right:1px solid var(--line);display:flex;flex-direction:column;transition:width .2s,min-width .2s}
+.vlist-col.collapsed{width:34px;min-width:34px;overflow:hidden}
+.vlist-col.collapsed #vlist,.vlist-col.collapsed .vlist-foot,.vlist-col.collapsed .vlist-head label,.vlist-col.collapsed .vlist-head input{display:none}
+.vlist-col.collapsed .vlist-head{justify-content:center;padding:10px 0;border-bottom:none;flex:1;align-items:flex-start}
+.vlist-head{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.vlist-head label{flex:1;margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer}
+.vlist-toggle{background:var(--surface);border:1.5px solid var(--line);border-radius:5px;cursor:pointer;padding:2px 8px;font-size:15px;font-weight:700;line-height:1;color:var(--ink)}
+.vlist-toggle:hover{border-color:var(--accent)}
+#vlist{flex:1;overflow-y:auto;max-height:560px}
+.vitem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.vitem:hover{background:var(--surface-2)}
+.vitem.active{background:#e4f0f4}
+.vitem input{flex:none;accent-color:var(--accent);cursor:pointer}
+.vitem-label{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vitem-label .gene{margin-right:4px}
+.vitem .tag{margin-left:auto;flex:none;font-size:10px}
+.vitem .tag+.tag{margin-left:4px}
+.vlist-foot{padding:8px 10px;border-top:1px solid var(--line)}
+.vdetail-col{flex:1;min-width:0;padding:14px 16px}
+.vempty{color:var(--muted);font-size:12px;padding:40px 20px;text-align:center}
 .gene{font-style:italic;font-weight:700}
 .tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;background:#eef1f4;color:var(--label)}
 .tag.p{background:#fde8e8;color:#b42318}.tag.lp{background:#fff1e6;color:#b45309}.tag.vus{background:#eef4ff;color:#1d4ed8}
-#veditor{display:none;margin-top:12px;border:1.5px solid var(--accent);border-radius:10px;padding:12px 14px;background:#fbfdfe}
-#veditor h3{margin:0 0 10px;font-size:14px}
+#veditor{display:none}
+/* The variant's Description: one rich-text box (paragraphs + bold), printed as typed */
+.rich-wrap{border:1.5px solid var(--line);border-radius:var(--radius);background:#fff}
+.rich-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,138,.13)}
+.rich-bar{position:sticky;top:-14px;z-index:3;display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line);background:var(--surface-2);border-radius:var(--radius) var(--radius) 0 0}
+.rich-btn{min-width:28px;height:26px;border:1.5px solid var(--line);border-radius:5px;background:#fff;cursor:pointer;font:inherit;font-size:13px}
+.rich-btn:hover,.rich-btn.on{border-color:var(--accent);background:#e4f0f4}
+.rich{min-height:220px;padding:9px 11px;font-size:13.5px;line-height:1.5;outline:none;white-space:pre-wrap}
+.rich>div{margin:0 0 .7em}
+.rich:empty::before{content:attr(data-placeholder);color:var(--muted)}
+#veditor .grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.ve-status{font-size:12px;color:var(--muted);margin-bottom:10px}
+.ve-status .gene{color:var(--ink)}
+.ve-report{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius)}
+label.inline{display:flex;align-items:center;gap:6px;margin:0;font-size:13px}
+label.inline select{width:auto}
+.detail-title{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 10px;padding-top:12px;border-top:2px solid var(--line);display:flex;align-items:center;gap:6px}
+.detail-title::before{content:'';width:3px;height:13px;background:var(--accent);border-radius:2px}
 .row-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2b36;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
 #toast.show{opacity:1}
-@media (max-width:900px){main{flex-direction:column}#form{width:100%;min-width:0}#preview{min-height:70vh;border-left:0;border-top:1px solid var(--line)}.grid{grid-template-columns:1fr}}
+@media (max-width:900px){main{flex-direction:column}#form{width:100%;min-width:0;overflow:visible}.tab-panel{overflow:visible}#preview{min-height:70vh;border-left:0;border-top:1px solid var(--line)}.grid{grid-template-columns:1fr}}
+.btn.ghost.clear{border-color:rgba(255,120,120,.55);color:#ffd0d0}
+.btn.ghost.clear:hover{background:rgba(255,120,120,.15)}
+/* Date boxes: type dd/mm/yyyy or pick from the calendar button */
+.date-wrap{position:relative}
+.date-wrap input[type=text]{padding-right:38px}
+.date-btn{position:absolute;right:5px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--label);cursor:pointer;padding:4px;border-radius:5px;display:flex}
+.date-btn:hover{color:var(--accent);background:var(--surface-2)}
+.date-pick{position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none}

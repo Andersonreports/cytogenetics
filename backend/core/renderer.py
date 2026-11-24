@@ -38,6 +38,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from . import narrative
 from . import variants as vr
 from .docx_utils import TemplateError, runs, set_para_tail, set_text, text
 from .models import ReportData
@@ -54,8 +55,9 @@ LABELS = {
 }
 
 MITO_DEFAULT = "No variant that warrants reporting was identified."
-NO_VARIANT_SUMMARY = ("Whole exome analysis in this sample did not show any pathogenic or likely "
-                      "pathogenic variant that could explain the indication for testing.")
+NO_VARIANT_SUMMARY = ("Whole exome and mitochondrial sequencing did not detect any pathogenic / likely "
+                      "pathogenic variants related to the described phenotype. A genetic cause for the "
+                      "patient’s clinical condition has not been identified.")
 
 _CODES = {"AR": "autosomal recessive", "AD": "autosomal dominant",
           "XLR": "X-linked recessive", "XLD": "X-linked dominant", "XL": "X-linked",
@@ -75,7 +77,7 @@ MITO_REFERENCE = (
     "doi: 10.1002/humu.24107. Epub 2020 Nov 10. PMID: 32906214; PMCID:PMC7717623.")
 MITO_ACCESSION = "NC_012920.1"
 
-# Column headings and widths (twips; the template's table is 10287 wide) of the tables
+# Column headings and relative widths (scaled to the template table's width) of the tables
 # the template has no copy of, as the lab's reports print them.
 CNV_COLUMNS = (("Variant", 2600), ("Zygosity", 1400), ("Size", 950), ("Disease", 2187),
                ("Inheritance", 1300), ("ACMG/ClinGen classification", 1850))
@@ -315,14 +317,50 @@ def summary_default(chosen: list[dict]) -> str:
     if snv:
         genes = list(dict.fromkeys(v.get("gene", "").strip() for v in snv if v.get("gene")))
         out.append(f"Whole exome analysis in this sample shows the following {_kinds_text(snv)} in the "
-                   f"{_joined(genes)} gene{'s' if len(genes) > 1 else ''}")
+                   f"{_joined(genes)} gene{'s' if len(genes) > 1 else ''}"
+                   + (_association(snv) if len(genes) == 1 else ""))
     if cnv:
         genes = list(dict.fromkeys(v.get("gene", "").strip() for v in cnv if v.get("gene")))
         over = f" overlapping the {_joined(genes)} gene{'s' if len(genes) > 1 else ''}" if genes else ""
         lead = "Furthermore, s" if snv else "S"
         out.append(f"{lead}equencing data was indicative of the following "
                    f"{_kinds_text(cnv, 'copy number variant')} (CNV){over}")
-    return ". ".join(out) + " (see table and description below)."
+    text = ". ".join(out) + " (see table and description below)."
+    return text + _carrier_note(snv if not cnv else [])
+
+
+def _disease_text(name: str) -> str:
+    """'Dihydropyrimidine dehydrogenase deficiency' -> 'dihydropyrimidine dehydrogenase
+    deficiency' (mid-sentence), leaving acronyms ('CHD2-related ...') as they are."""
+    name = name.strip()
+    return name if name[:2].isupper() else name[:1].lower() + name[1:]
+
+
+def _association(snv: list[dict]) -> str:
+    """' that is associated with autosomal recessive dihydropyrimidine dehydrogenase
+    deficiency', from the variants' Disease and Inheritance boxes (one gene)."""
+    diseases = list(dict.fromkeys(d.strip() for v in snv for d in v.get("disease", "").split(";")
+                                  if d.strip() and d.strip() != "-"))
+    if not diseases:
+        return ""
+    codes = list(dict.fromkeys(c for v in snv for c in _codes(v) if c in _CODES))
+    mode = f"{_CODES[codes[0]]} " if len(codes) == 1 and len(diseases) == 1 else ""
+    return f" that is associated with {_no_break_linked(mode)}{_joined([_disease_text(d) for d in diseases])}"
+
+
+def _carrier_note(snv: list[dict]) -> str:
+    """One heterozygous (likely) pathogenic variant for a recessive-only condition: the
+    lab's carrier-state sentences."""
+    if len(snv) != 1:
+        return ""
+    v = snv[0]
+    label = vr.classification(v).strip().lower()
+    if _codes(v) != ["AR"] or vr.allele_status(v).lower() != "heterozygous" or \
+            label not in ("pathogenic", "likely pathogenic"):
+        return ""
+    return (" Note that causation of disease with respect to this condition requires bi-allelic disease "
+            f"causing variants. The presence of only one {label} variant as seen in this patient "
+            "represents a carrier state.")
 
 
 def mito_summary_default(chosen: list[dict]) -> str:
@@ -489,6 +527,15 @@ def _make_table(proto, columns, rows: list[list[list[list[tuple]]]]):
     with `columns` ((heading, width), ...) and one row per item of `rows` (each a list of
     cells, each a list of lines of (text, b, i, sup) parts)."""
     tbl = copy.deepcopy(proto)
+    # Column widths are given for a 10287-wide table: scaled to the template table's own
+    # width (the text width), so every table lines up with the text margins.
+    tblw = tbl.find(qn("w:tblPr") + "/" + qn("w:tblW"))
+    total = int(tblw.get(qn("w:w"))) if tblw is not None and (tblw.get(qn("w:w")) or "").isdigit() else 0
+    given = sum(w for _, w in columns)
+    if total and given != total:
+        widths = [w * total // given for _, w in columns]
+        widths[-1] += total - sum(widths)
+        columns = tuple((h, w) for (h, _), w in zip(columns, widths))
     grid = tbl.find(qn("w:tblGrid"))
     for col in list(grid):
         grid.remove(col)
@@ -641,17 +688,47 @@ def _fill_footnote(p, chosen: list[dict]) -> None:
 
 
 def _description(v: dict) -> str:
-    """The text under a variant's bold title line: only what the user typed. The OMIM
-    sentence older versions pre-filled ('... is caused by mutation in the X gene
-    (OMIM*...)'), still in forms saved by the browser, is left out while unedited."""
+    """The text under a variant's bold title line: the form's Description box, one
+    paragraph per blank-line-separated block, **bold** where the user made it bold.
+    Variants saved before the box was one (Description + Variant evidence + bold
+    Classification statement) are joined the same way. The OMIM sentence older versions
+    pre-filled ('... is caused by mutation in the X gene (OMIM*...)') is left out
+    while unedited."""
+    if "description" in v:
+        return (v.get("description") or "").strip()
     phen = v.get("omim_phenotype", "").strip()
     if phen and phen == v.get("omim_phenotype_prefix", "").strip():
         phen = ""
-    return "\n\n".join(t for t in (phen, v.get("evidence", "").strip()) if t)
+    statement = v.get("statement", "").strip()
+    return "\n\n".join(t for t in (phen, v.get("evidence", "").strip(),
+                                   "\n\n".join(f"**{s}**" for s in _paragraphs(statement))) if t)
 
 
 def _has_text(v: dict) -> bool:
-    return bool(_description(v) or v.get("statement", "").strip())
+    return bool(_description(v))
+
+
+def _is_title_line(part: str) -> bool:
+    """'**Variant NM_...:c... in GENE gene**': a wholly bold paragraph starting 'Variant'."""
+    part = re.sub(r"</?i>", "", part.strip())
+    return part.startswith("**Variant") and part.endswith("**") and part.count("**") == 2
+
+
+def _rich(part: str, genes: list[str]) -> list[tuple]:
+    """A paragraph with **bold** and <i>italic</i> spans as runs (gene symbols in
+    italics as usual)."""
+    out, bold, ital = [], False, False
+    for tok in re.split(r"(\*\*|</?i>)", part):
+        if tok == "**":
+            bold = not bold
+        elif tok == "<i>":
+            ital = True
+        elif tok == "</i>":
+            ital = False
+        elif tok:
+            parts = _with_genes(tok, genes, bold=bold)
+            out += [(t, b, True, s) for t, b, _, s in parts] if ital else parts
+    return out
 
 
 def _title(v: dict, many: bool):
@@ -686,18 +763,21 @@ def _fill_description(head, stop, chosen: list[dict], conclusion: str, genes: li
     title_model, body_model = filled[0], filled[1]
     anchor = head
     for v in chosen:
-        parts = _title(v, len(chosen) > 1)
+        paras = _paragraphs(_description(v))
+        # The Description box starts with the bold 'Variant ... gene' line (the form
+        # builds it there, editable); a box without one gets the built line.
+        own_title = bool(paras) and _is_title_line(paras[0])
+        parts = None if own_title else _title(v, len(chosen) > 1)
         if parts:
             title = _new_para(title_model, parts)
             _keep_next(title)
             anchor.addnext(title)
             anchor = title
-        for part in _paragraphs(_description(v)):
-            p = _new_para(body_model, _with_genes(part, genes))
-            anchor.addnext(p)
-            anchor = p
-        for part in _paragraphs(v.get("statement", "")):
-            p = _new_para(body_model, _with_genes(part, genes, bold=True))
+        for k, part in enumerate(paras):
+            is_title = own_title and k == 0
+            p = _new_para(title_model if is_title else body_model, _rich(part, genes))
+            if is_title:
+                _keep_next(p)
             anchor.addnext(p)
             anchor = p
     for part in _paragraphs(conclusion):
@@ -733,25 +813,79 @@ def _finding(v: dict) -> str:
     return f if f in dict(EXTRA_BLOCKS) else "primary"
 
 
-def block_summary_default(chosen: list[dict]) -> str:
-    """Summary of a Secondary / Incidental block when the form leaves it blank: one
-    sentence per variant, as the lab writes them ('A pathogenic variant was identified
-    in the HBB gene in a heterozygous state')."""
-    out = []
+def block_summary_default(chosen: list[dict], block: str = "incidental") -> str:
+    """Summary of a Secondary / Incidental block when the form leaves it blank, as the
+    lab writes it: per variant, what was found and the disease it is associated with;
+    for an incidental finding, that it is unlikely to explain the phenotype, and for one
+    heterozygous (likely) pathogenic variant of a recessive condition, the carrier-state
+    and family-screening sentences. One paragraph per variant."""
+    if block == "secondary":
+        return _secondary_summary(chosen)
+    paras = []
     for v in chosen:
         label = vr.classification(v).strip()
         what = ("variant of uncertain significance" if "uncertain" in label.lower()
                 else f"{label.lower()} variant" if label else "variant")
         state = vr.allele_status(v).strip().lower()
-        state = f" in a {state} state" if state and state != "-" else ""
+        state_text = f" in a {state} state" if state and state != "-" else ""
+        gene = v.get("gene", "").strip()
+        article = "An" if what[:1] in "aeiou" else "A"
+        if kind(v) == "cnv":
+            what = what.replace("variant", "copy number variant")
+            where = f" overlapping the {gene} gene" if gene else ""
+            text = f"{article} {what} was identified{where}{state_text}."
+        else:
+            text = f"{article} {what} was identified in the {gene} gene{state_text}."
+        diseases = [d.strip() for d in v.get("disease", "").split(";") if d.strip() and d.strip() != "-"]
+        codes = [c for c in _codes(v) if c in _CODES]
+        if diseases:
+            mode = ""
+            if len(codes) == 1:
+                words = _CODES[codes[0]]
+                mode = f", {'a' if words.startswith('Y') else 'an'} {_no_break_linked(words)} condition"
+            text += f" This variant is associated with {_joined(diseases)}{mode}."
+        if block == "incidental":
+            text += " This finding is unlikely to contribute to the patient’s clinical phenotype."
+            if (codes == ["AR"] and state == "heterozygous"
+                    and label.lower() in ("pathogenic", "likely pathogenic") and diseases):
+                d = diseases[0]
+                text += (" As the variant is present in the heterozygous state, the patient is considered a "
+                         f"carrier of {_disease_text(d)} and is not, in usual circumstances, expected to "
+                         f"manifest clinical features of {_disease_text(d)}. This variant is being reported "
+                         "to facilitate appropriate carrier screening for family members and genetic "
+                         "counselling.")
+        paras.append(text)
+    return "\n\n".join(paras)
+
+
+def _secondary_summary(chosen: list[dict]) -> str:
+    """Secondary finding Summary, as the lab writes it ('A pathogenic variant in the G6PD
+    gene was identified (see table below) in this sample. Pathogenic mutations in this
+    gene cause ... The contribution of this variant to the indication for testing ... is
+    uncertain. However, ...'), one paragraph per variant, then the closing line."""
+    paras = []
+    for v in chosen:
+        label = vr.classification(v).strip()
+        what = ("variant of uncertain significance" if "uncertain" in label.lower()
+                else f"{label.lower()} variant" if label else "variant")
         gene = v.get("gene", "").strip()
         if kind(v) == "cnv":
             what = what.replace("variant", "copy number variant")
             where = f" overlapping the {gene} gene" if gene else ""
-            out.append(f"A {what} was identified{where}{state}")
         else:
-            out.append(f"A {what} was identified in the {gene} gene{state}")
-    return ". ".join(out) + " (see table below)." if out else ""
+            where = f" in the {gene} gene" if gene else ""
+        article = "An" if what[:1] in "aeiou" else "A"
+        text = f"{article} {what}{where} was identified (see table below) in this sample."
+        diseases = [_disease_text(d) for d in v.get("disease", "").split(";") if d.strip() and d.strip() != "-"]
+        if diseases:
+            text += f" Pathogenic mutations in this gene cause {_joined(diseases)}."
+        text += (" The contribution of this variant to the indication for testing in this patient is "
+                 "uncertain. However, this variant is being reported to facilitate appropriate "
+                 "management of the related condition.")
+        paras.append(text)
+    if paras:
+        paras.append("Further details are provided in the table and description below.")
+    return "\n\n".join(paras)
 
 
 class _Block:
@@ -935,6 +1069,21 @@ def _fill_signatory(doc, value: str) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def default_texts(data: ReportData) -> dict:
+    """The texts the report prints when the form leaves a box blank, from the ticked
+    variants: the form shows them in its boxes, ready to edit."""
+    ticked = [v for v in data.variants if v.get("selected")]
+    mito = [v for v in ticked if kind(v) == "mito"]
+    nuclear = [v for v in ticked if kind(v) != "mito"]
+    out = {"summary": summary_default([v for v in nuclear if _finding(v) == "primary"]),
+           "mito": mito_summary_default(mito) if mito else MITO_DEFAULT}
+    for key, word in EXTRA_BLOCKS:
+        out[f"{word}_summary"] = block_summary_default([v for v in nuclear if _finding(v) == key], key)
+    # Per variant (same order): Description, Variant evidence, Classification statement.
+    out["variants"] = [narrative.texts(v) for v in data.variants]
+    return out
+
+
 def template_path() -> str:
     return resource_path(*TEMPLATE)
 
@@ -975,7 +1124,7 @@ def render_report(data: ReportData):
         _add_part(mito_line(), blk, cnv, "cnv", genes, conclusion=data.conclusion, suffix="(CNV)",
                   always_describe=True)
     for word, vs in extra:
-        summary = getattr(data, f"{word}_summary", "").strip() or block_summary_default(vs)
+        summary = getattr(data, f"{word}_summary", "").strip() or block_summary_default(vs, word)
         _add_block(doc, blk, word, vs, summary, genes)
     if mito:
         _add_mito(doc, blk, mito, data.mito.strip() or mito_summary_default(mito), genes)

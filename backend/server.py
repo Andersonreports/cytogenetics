@@ -13,14 +13,13 @@ from .core import variants as vr
 from .core.models import ReportData, today_str
 from .core.pdf import docx_to_pdf, pdf_pages_png
 from .core.os_utils import resource_path
-from .core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_docx
+from .core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, default_texts, file_stem, render_docx
 from .core.renderer import kind as variant_kind
 
 # The page (frontend/index.html) and its css / js files (served under /static).
 app = Flask(__name__, template_folder=resource_path("frontend"),
             static_folder=resource_path("frontend"), static_url_path="/static")
 
-SAMPLES = ["Peripheral Blood", "DNA", "Amniotic fluid", "Product Of Conception", "CVS"]
 CLASSES = ["Pathogenic", "Likely Pathogenic", "Variant of Uncertain Significance",
            "Pathogenic (carrier state)", "Drug response", "Likely Benign", "Benign"]
 
@@ -43,7 +42,7 @@ def index():
 @app.route("/api/init")
 def api_init():
     return jsonify({
-        "today": today_str(), "samples": SAMPLES, "classes": CLASSES,
+        "today": today_str(), "classes": CLASSES,
         "mito_default": MITO_DEFAULT, "no_variant_summary": NO_VARIANT_SUMMARY,
     })
 
@@ -78,6 +77,16 @@ def api_upload_variants():
         v.setdefault("hgnc", "")
         v.setdefault("consequence", "")
     return jsonify({"variants": found})
+
+
+@app.route("/api/defaults", methods=["POST"])
+def api_defaults():
+    """The generated Summary / Mitochondrial texts for the ticked variants (the form shows
+    them in its boxes until the user edits a box)."""
+    try:
+        return jsonify(default_texts(ReportData.from_dict((request.json or {}).get("data", {}))))
+    except Exception as e:  # noqa: BLE001
+        return _error(e)
 
 
 @app.route("/api/preview", methods=["POST"])
