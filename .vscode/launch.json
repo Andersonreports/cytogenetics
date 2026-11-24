@@ -5,7 +5,7 @@
       "name": "Run the tool (this PC)",
       "type": "debugpy",
       "request": "launch",
-      "module": "app.main",
+      "module": "backend.main",
       "cwd": "${workspaceFolder}",
       "justMyCode": true
     },
@@ -13,7 +13,7 @@
       "name": "Run the tool (LAN)",
       "type": "debugpy",
       "request": "launch",
-      "module": "app.main",
+      "module": "backend.main",
       "args": ["--lan"],
       "cwd": "${workspaceFolder}",
       "justMyCode": true

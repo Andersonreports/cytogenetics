@@ -5,10 +5,9 @@
 # on the user's PC.
 
 a = Analysis(
-    ["app/main.py"],
+    ["backend/main.py"],
     pathex=["."],
-    datas=[("app/templates", "app/templates"), ("app/data", "app/data"),
-           ("app/web/templates", "app/web/templates")],
+    datas=[("frontend", "frontend"), ("assets", "assets"), ("database", "database")],
     hiddenimports=["docx", "openpyxl", "pypdfium2", "PIL", "win32com.client", "pythoncom"],
 )
 pyz = PYZ(a.pure)

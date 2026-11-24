@@ -1,8 +1,8 @@
 """Start the CMC Cytogenetics report tool and open it in the browser.
 
-    python -m app.main               this computer only (http://127.0.0.1:5200)
-    python -m app.main --lan         also reachable from other computers on the LAN
-    python -m app.main --port 5300 --no-browser
+    python -m backend.main               this computer only (http://127.0.0.1:5200)
+    python -m backend.main --lan         also reachable from other computers on the LAN
+    python -m backend.main --port 5300 --no-browser
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def main() -> None:
     args = parser.parse_args()
 
     from werkzeug.serving import make_server
-    from app.web.server import app      # absolute: the exe runs this file as a script
+    from backend.server import app      # absolute: the exe runs this file as a script
 
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     url = f"http://127.0.0.1:{args.port}/"

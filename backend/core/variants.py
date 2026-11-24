@@ -346,7 +346,8 @@ def _finish_variant(v: dict) -> None:
     v["omim_id"] = ", ".join(ids)           # all of the gene's; the user deletes the rest
     v["disease"] = suggested_disease(v)
     v["gene_mim"] = gene_mim_number(v.get("gene", ""))
-    v["omim_phenotype_prefix"] = v["omim_phenotype"] = omim_phenotype_prefix(v)
+    v["omim_phenotype_prefix"] = omim_phenotype_prefix(v)
+    v["omim_phenotype"] = ""        # the description is typed by the user
     v["inheritance"] = suggested_inheritance(v) or v["inheritance"]
 
 
@@ -364,7 +365,7 @@ def _genemap() -> dict[str, list[tuple[str, str]]]:
     from .os_utils import resource_path
     out: dict[str, list[tuple[str, str]]] = {}
     try:
-        with open(resource_path("app", "data", "omim_genemap2.txt"), encoding="utf-8") as f:
+        with open(resource_path("database", "omim_genemap2.txt"), encoding="utf-8") as f:
             for line in f:
                 if line.startswith("#"):
                     continue
@@ -386,7 +387,7 @@ def _gene_mim_map() -> dict[str, str]:
     from .os_utils import resource_path
     out: dict[str, str] = {}
     try:
-        with open(resource_path("app", "data", "omim_mim2gene.txt"), encoding="utf-8") as f:
+        with open(resource_path("database", "omim_mim2gene.txt"), encoding="utf-8") as f:
             for line in f:
                 if line.startswith("#"):
                     continue

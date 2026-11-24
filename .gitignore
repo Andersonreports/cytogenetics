@@ -20,7 +20,10 @@ dist/
 *.xlsm
 
 # ...except the report template the renderer fills
-!app/templates/*.docx
+!assets/cmc_cytogenetics.docx
 
-# OMIM data: licensed, not for redistribution; copy into app/data/ locally
-app/data/omim_*.txt
+# Patient sample files (VarSeq Excel, finished reports) - local only
+/samples/
+
+# OMIM data: licensed, not for redistribution; copy into database/ locally (see database/README.md)
+database/omim_*.txt

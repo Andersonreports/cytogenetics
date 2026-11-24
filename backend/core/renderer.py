@@ -1,4 +1,4 @@
-"""Fill the CMC Department of Cytogenetics WES & Mito report (app/templates/cmc_cytogenetics.docx).
+"""Fill the CMC Department of Cytogenetics WES & Mito report (assets/cmc_cytogenetics.docx).
 
 What is filled:
   * the NAME / HOSP NO label table and the INDICATION box, from the form;
@@ -12,6 +12,15 @@ What is filled:
     or "Incidental finding:" block before the Mitochondrial line, each with its own
     Summary, table, footnote and (when there is text) Description, built from copies
     of the primary-finding parts;
+  * copy number variants (variant "kind" 'cnv'): their own table (Variant | Zygosity |
+    Size | Disease | Inheritance | ACMG/ClinGen classification) and description after
+    the sequence variants of the same block, headed '(CNV)' (and those '(SNV)' when a
+    block has both); a CNV's gene list gives the 'Table showing all genes in the
+    involved segment' above the signatory;
+  * mitochondrial variants (kind 'mito'): the Mitochondrial genome analysis line
+    becomes a block with its Summary, the mitochondrial variant table and description,
+    and the ACMG mtDNA reference is added to the References;
+  * each variant's bold statement ('Based on ACMG criteria ...') after its description;
   * the Mitochondrial genome analysis line, the Recommendations and the signatory.
 With no primary variant ticked the table and the Description are left out, and the
 "Primary finding:" line too unless a Secondary / Incidental block follows. Limitations, Disclaimers, Methodology and References stay exactly as in the
@@ -34,7 +43,7 @@ from .docx_utils import TemplateError, runs, set_para_tail, set_text, text
 from .models import ReportData
 from .os_utils import resource_path
 
-TEMPLATE = ("app", "templates", "cmc_cytogenetics.docx")
+TEMPLATE = ("assets", "cmc_cytogenetics.docx")
 FILE_SUFFIX = "WES_&_Mito_Report"
 
 # Label table: the label as printed -> PatientInfo field.
@@ -53,9 +62,28 @@ _CODES = {"AR": "autosomal recessive", "AD": "autosomal dominant",
           "YL": "Y-linked", "MT": "mitochondrial"}
 
 _HEADINGS = ("Result:", "Primary finding:", "Secondary finding:", "Incidental finding:",
-             "Whole exome sequencing:", "Summary:", "Table detailing", "Description of",
-             "Recommendations", "LIMITATIONS OF THE TEST", "DISCLAIMERS",
-             "TEST METHODOLOGY", "REFERENCES")
+             "Whole exome sequencing:", "Whole exome analysis:", "Summary:", "Table detailing",
+             "Table showing", "Description of", "Recommendations", "LIMITATIONS OF THE TEST",
+             "DISCLAIMERS", "TEST METHODOLOGY", "REFERENCES")
+
+# Reference added when a mitochondrial variant is reported (as in the lab's reports).
+MITO_REFERENCE = (
+    "McCormick EM, Lott MT, Dulik MC, Shen L, Attimonelli M, Vitale O, Karaa A, Bai R, "
+    "Pineda-Alvarez DE, Singh LN, Stanley CM, Wong S, Bhardwaj A, Merkurjev D, MaoR, Sondheimer N, "
+    "Zhang S, Procaccio V, Wallace DC, Gai X, Falk MJ. Specifications of the ACMG/AMP standards and "
+    "guidelines for mitochondrial DNA variant interpretation. Hum Mutat. 2020 Dec;41(12):2028-2057. "
+    "doi: 10.1002/humu.24107. Epub 2020 Nov 10. PMID: 32906214; PMCID:PMC7717623.")
+MITO_ACCESSION = "NC_012920.1"
+
+# Column headings and widths (twips; the template's table is 10287 wide) of the tables
+# the template has no copy of, as the lab's reports print them.
+CNV_COLUMNS = (("Variant", 2600), ("Zygosity", 1400), ("Size", 950), ("Disease", 2187),
+               ("Inheritance", 1300), ("ACMG/ClinGen classification", 1850))
+MITO_COLUMNS = (("Gene", 1650), ("Variant identifiers", 2350), ("DNA source", 1000),
+                ("Disease (Inheritance)", 1787), ("Allele state", 1400),
+                ("ACMG classification (attributes)", 2100))
+SEGMENT_COLUMNS = (("Region", 2900), ("Type", 1000), ("Size", 1100), ("List of genes", 5287))
+SEGMENT_HEADING = "Table showing all genes in the involved segment:"
 
 _AFTER_VERT_ALIGN = {qn(t) for t in ("w:rtl", "w:cs", "w:em", "w:lang", "w:eastAsianLayout",
                                      "w:specVanish", "w:oMath")}
@@ -147,11 +175,25 @@ def _run(rpr, value: str, b=False, i=False, sup=False):
         else:
             rpr.append(va)
     r.append(rpr)
-    t = OxmlElement("w:t")
-    t.text = value
-    t.set(qn("xml:space"), "preserve")
-    r.append(t)
+    # U+2011 (non-breaking hyphen) becomes Word's own w:noBreakHyphen, which every
+    # font shows as a hyphen; the line never breaks there.
+    for n, piece in enumerate(value.split(NB_HYPHEN)):
+        if n:
+            r.append(OxmlElement("w:noBreakHyphen"))
+        if piece:
+            t = OxmlElement("w:t")
+            t.text = piece
+            t.set(qn("xml:space"), "preserve")
+            r.append(t)
     return r
+
+
+NB_HYPHEN = "‑"
+
+
+def _no_break_linked(text: str) -> str:
+    """'X-linked' / 'Y-linked' kept on one line."""
+    return re.sub(r"\b([XY])-(linked)", rf"\1{NB_HYPHEN}\2", text, flags=re.I)
 
 
 def _new_para(model, parts, rpr=None):
@@ -234,15 +276,22 @@ def _diseases(v: dict) -> list[str]:
     return out or ["-"]
 
 
-def summary_default(chosen: list[dict]) -> str:
-    """The Summary when the form leaves it blank."""
-    if not chosen:
-        return NO_VARIANT_SUMMARY
+def kind(v: dict) -> str:
+    """'snv' (a sequence variant: the default), 'cnv' (copy number variant) or 'mito'
+    (mitochondrial genome variant). The form's pick, else chrM in the Excel's position."""
+    k = (v.get("kind") or "").strip().lower()
+    if k in ("cnv", "mito"):
+        return k
+    chrom = v.get("chrom_pos", "").partition(":")[0].strip().upper()
+    return "mito" if chrom in ("CHRM", "CHRMT", "M", "MT") else "snv"
 
-    def joined(items):
-        return (", ".join(items[:-1]) + " and " + items[-1]) if len(items) > 1 else "".join(items)
 
-    genes = list(dict.fromkeys(v.get("gene", "").strip() for v in chosen if v.get("gene")))
+def _joined(items):
+    return (", ".join(items[:-1]) + " and " + items[-1]) if len(items) > 1 else "".join(items)
+
+
+def _kinds_text(chosen: list[dict], noun: str = "variant") -> str:
+    """'pathogenic variant', 'likely pathogenic and pathogenic variants' ..."""
     counts: dict[str, int] = {}
     for v in chosen:
         label = vr.classification(v).strip().lower()
@@ -250,11 +299,42 @@ def summary_default(chosen: list[dict]) -> str:
     kinds = []
     for label, n in counts.items():
         if "uncertain" in label:
-            kinds.append("variants of uncertain significance" if n > 1 else "variant of uncertain significance")
+            kinds.append(f"{noun}s of uncertain significance" if n > 1 else f"{noun} of uncertain significance")
         else:
-            kinds.append(f"{label} variant{'s' if n > 1 else ''}")
-    return (f"Whole exome analysis in this sample shows the following {joined(kinds)} in the "
-            f"{joined(genes)} gene{'s' if len(genes) > 1 else ''} (see table and description below).")
+            kinds.append(f"{label} {noun}{'s' if n > 1 else ''}".strip())
+    return _joined(kinds)
+
+
+def summary_default(chosen: list[dict]) -> str:
+    """The Summary when the form leaves it blank."""
+    if not chosen:
+        return NO_VARIANT_SUMMARY
+    snv = [v for v in chosen if kind(v) != "cnv"]
+    cnv = [v for v in chosen if kind(v) == "cnv"]
+    out = []
+    if snv:
+        genes = list(dict.fromkeys(v.get("gene", "").strip() for v in snv if v.get("gene")))
+        out.append(f"Whole exome analysis in this sample shows the following {_kinds_text(snv)} in the "
+                   f"{_joined(genes)} gene{'s' if len(genes) > 1 else ''}")
+    if cnv:
+        genes = list(dict.fromkeys(v.get("gene", "").strip() for v in cnv if v.get("gene")))
+        over = f" overlapping the {_joined(genes)} gene{'s' if len(genes) > 1 else ''}" if genes else ""
+        lead = "Furthermore, s" if snv else "S"
+        out.append(f"{lead}equencing data was indicative of the following "
+                   f"{_kinds_text(cnv, 'copy number variant')} (CNV){over}")
+    return ". ".join(out) + " (see table and description below)."
+
+
+def mito_summary_default(chosen: list[dict]) -> str:
+    """Summary of the Mitochondrial genome analysis block when the form leaves it blank."""
+    out = []
+    for v in chosen:
+        level = v.get("heteroplasmy", "").strip().rstrip("%").strip()
+        at = f" at a heteroplasmy level of {level}%" if level else ""
+        label = _kinds_text([v])
+        out.append(f"A{'n' if label[:1] in 'aeiou' else ''} {label} was identified in the "
+                   f"mitochondrial gene {v.get('gene', '').strip()}{at}")
+    return ". ".join(out) + " (see table and description below)."
 
 
 # ---------------------------------------------------------------------------
@@ -357,16 +437,9 @@ def _fill_table(table, chosen: list[dict]) -> None:
             if tcpr is not None:
                 for m in tcpr.findall(qn("w:vMerge")):
                     tcpr.remove(m)
-        gene = v.get("gene", "").strip()
-        name = v.get("gene_name", "").strip()
-        hgnc = v.get("hgnc", "").strip()
         protein = v.get("protein", "").strip()
         consequence = _consequence(v)
-        gene_cell = [[(gene or "-", True, True, False)]]
-        if name:
-            gene_cell += [[], [(f"({name.strip('()')})", True, False, False)]]
-        if hgnc:
-            gene_cell += [[], _plain(hgnc if hgnc.upper().startswith("HGNC") else f"HGNC: {hgnc}")]
+        gene_cell = _gene_cell(v)
         ids = [_plain(_genomic(v)), [], [("#", False, False, True), (_cdna(v), False, False, False)]]
         if protein:
             ids += [[], [("#", False, False, True), (protein, False, False, False)]]
@@ -375,17 +448,17 @@ def _fill_table(table, chosen: list[dict]) -> None:
             [_plain(vr.region(v))] + ([[], _plain(consequence)] if consequence else []),
             ids,
             [_plain(vr.allele_status(v))],
-            sum(([_plain(d), []] for d in _diseases(v)), [])[:-1],
-            [_plain(vr.classification(v))] + ([[], _plain(f"({_criteria(v)})")] if _criteria(v) else []),
+            sum(([_plain(_no_break_linked(d)), []] for d in _diseases(v)), [])[:-1],
+            _class_lines(v),
         ]
         for tc, lines in zip(tcs, cells):
             _cell_paras(tc, lines)
         table.append(tr)
-    # Keep the header row (and every row but the last) on the page of the next row,
-    # so a table never starts with its header alone at the foot of a page.
-    for tr in table.findall(qn("w:tr"))[:-1]:
-        for p in tr.iter(qn("w:p")):
-            _keep_next(p)
+    # Keep the header row on the page of the first variant row, so a table never starts
+    # with its header alone at the foot of a page. (Only the header: keeping every row
+    # together would push a tall table whole onto the next page.)
+    for p in table.findall(qn("w:tr"))[0].iter(qn("w:p")):
+        _keep_next(p)
 
 
 def _criteria(v: dict) -> str:
@@ -393,6 +466,152 @@ def _criteria(v: dict) -> str:
     (printed in brackets under the classification)."""
     raw = v.get("criteria", "").strip().strip("()[]").strip()
     return ", ".join(p.strip() for p in raw.split(",") if p.strip())
+
+
+def _set_width(tc, width: int) -> None:
+    tcpr = tc.find(qn("w:tcPr"))
+    if tcpr is None:
+        tcpr = OxmlElement("w:tcPr")
+        tc.insert(0, tcpr)
+    for tag in ("w:vMerge", "w:gridSpan", "w:hMerge"):
+        for el in tcpr.findall(qn(tag)):
+            tcpr.remove(el)
+    w = tcpr.find(qn("w:tcW"))
+    if w is None:
+        w = OxmlElement("w:tcW")
+        tcpr.insert(0, w)
+    w.set(qn("w:w"), str(width))
+    w.set(qn("w:type"), "dxa")
+
+
+def _make_table(proto, columns, rows: list[list[list[list[tuple]]]]):
+    """A new table in the format of `proto` (the findings table: header row + body row)
+    with `columns` ((heading, width), ...) and one row per item of `rows` (each a list of
+    cells, each a list of lines of (text, b, i, sup) parts)."""
+    tbl = copy.deepcopy(proto)
+    grid = tbl.find(qn("w:tblGrid"))
+    for col in list(grid):
+        grid.remove(col)
+    for _, width in columns:
+        col = OxmlElement("w:gridCol")
+        col.set(qn("w:w"), str(width))
+        grid.append(col)
+    trs = tbl.findall(qn("w:tr"))
+    for tr in trs:
+        tbl.remove(tr)
+
+    def row(model_tr, cells):
+        tr = copy.deepcopy(model_tr)
+        model_tc = tr.findall(qn("w:tc"))[0]
+        for tc in tr.findall(qn("w:tc")):
+            tr.remove(tc)
+        for (_, width), lines in zip(columns, cells):
+            tc = copy.deepcopy(model_tc)
+            _set_width(tc, width)
+            _cell_paras(tc, lines)
+            tr.append(tc)
+        return tr
+
+    head = row(trs[0], [[[(h, True, False, False)]] for h, _ in columns])
+    tbl.append(head)
+    for p in head.iter(qn("w:p")):
+        _keep_next(p)
+    for cells in rows:
+        tr = row(trs[1], cells)
+        trpr = tr.find(qn("w:trPr"))
+        if trpr is None:
+            trpr = OxmlElement("w:trPr")
+            tr.insert(0, trpr)
+        for h in trpr.findall(qn("w:trHeight")):
+            trpr.remove(h)
+        if trpr.find(qn("w:cantSplit")) is None:
+            trpr.append(OxmlElement("w:cantSplit"))
+        tbl.append(tr)
+    return tbl
+
+
+def _inheritance_lines(v: dict) -> list[list[tuple]]:
+    """Inheritance written out ('XLR' -> 'X-linked recessive'), one pattern per line."""
+    out = []
+    for c in re.split(r"[,/;]", v.get("inheritance", "")):
+        c = c.strip()
+        if c:
+            full = _CODES.get(c.upper(), c)
+            out.append(_plain(_no_break_linked(full[:1].upper() + full[1:])))
+    return out or [_plain("-")]
+
+
+def _class_lines(v: dict, brackets: str = "()") -> list[list[tuple]]:
+    crit = _criteria(v)
+    return [_plain(vr.classification(v) or "-")] + (
+        [[], _plain(f"{brackets[0]}{crit}{brackets[1]}")] if crit else [])
+
+
+def _gene_cell(v: dict) -> list[list[tuple]]:
+    gene, name, hgnc = (v.get(k, "").strip() for k in ("gene", "gene_name", "hgnc"))
+    cell = [[(gene or "-", True, True, False)]]
+    if name:
+        cell += [[], [(f"({name.strip('()')})", True, False, False)]]
+    if hgnc:
+        cell += [[], _plain(hgnc if hgnc.upper().startswith("HGNC") else f"HGNC: {hgnc}")]
+    return cell
+
+
+def _cnv_rows(chosen: list[dict]) -> list:
+    rows = []
+    for v in chosen:
+        diseases = [d.strip() for d in v.get("disease", "").split(";") if d.strip()] or ["-"]
+        rows.append([
+            [_plain(v.get("variant", "").strip() or "-")],
+            [_plain(vr.allele_status(v))],
+            [_plain(v.get("size", "").strip() or "-")],
+            sum(([_plain(_no_break_linked(d)), []] for d in diseases), [])[:-1],
+            _inheritance_lines(v),
+            _class_lines(v),
+        ])
+    return rows
+
+
+def _mito_variant(v: dict) -> str:
+    """'m.4296G>A' (an 'm.' added to a bare '4296G>A')."""
+    c = v.get("variant", "").strip()
+    return c if not c or re.match(r"[mgc]\.", c) else f"m.{c}"
+
+
+def _mito_ids(v: dict, with_gene: bool) -> str:
+    """'NC_012920.1(MT-TI):m.4296G>A' (table) / 'NC_012920.1:m.4296G>A' (title)."""
+    acc = v.get("nm_id", "").strip() or MITO_ACCESSION
+    gene = v.get("gene", "").strip()
+    return f"{acc}({gene}):{_mito_variant(v)}" if with_gene and gene else f"{acc}:{_mito_variant(v)}"
+
+
+def _mito_rows(chosen: list[dict]) -> list:
+    rows = []
+    for v in chosen:
+        level = v.get("heteroplasmy", "").strip().rstrip("%").strip()
+        state = v.get("zygosity", "").strip() or ("Heteroplasmy" if level else "-")
+        state_lines = [_plain(state)] + ([_plain(f"({level}%)")] if level else [])
+        rows.append([
+            _gene_cell(v),
+            [_plain(_mito_ids(v, True))],
+            [_plain(v.get("dna_source", "").strip() or "Blood")],
+            sum(([_plain(_no_break_linked(d)), []] for d in _diseases(v)), [])[:-1],
+            state_lines,
+            _class_lines(v, "[]"),
+        ])
+    return rows
+
+
+def _segment_rows(chosen: list[dict]) -> list:
+    rows = []
+    for v in chosen:
+        hgvs = v.get("variant", "").strip()
+        typ = v.get("cnv_type", "").strip() or (
+            "Loss" if re.search(r"del\b|del$", hgvs) else "Gain" if re.search(r"dup|\[\d\]", hgvs) else "-")
+        genes = ", ".join(g.strip() for g in re.split(r"[,;\n]+", v.get("segment_genes", "")) if g.strip())
+        rows.append([[_plain(hgvs or "-")], [_plain(typ)], [_plain(v.get("size", "").strip() or "-")],
+                     [_plain(genes)]])
+    return rows
 
 
 def _plural_headings(paras: list, count: int) -> None:
@@ -421,9 +640,45 @@ def _fill_footnote(p, chosen: list[dict]) -> None:
              else "#-pertain to MANE select transcript")
 
 
+def _description(v: dict) -> str:
+    """The text under a variant's bold title line: only what the user typed. The OMIM
+    sentence older versions pre-filled ('... is caused by mutation in the X gene
+    (OMIM*...)'), still in forms saved by the browser, is left out while unedited."""
+    phen = v.get("omim_phenotype", "").strip()
+    if phen and phen == v.get("omim_phenotype_prefix", "").strip():
+        phen = ""
+    return "\n\n".join(t for t in (phen, v.get("evidence", "").strip()) if t)
+
+
+def _has_text(v: dict) -> bool:
+    return bool(_description(v) or v.get("statement", "").strip())
+
+
+def _title(v: dict, many: bool):
+    """The bold line over a variant's description: 'Variant NM_..:c.. / NP_..:p.. in GENE
+    gene' ('Variant NC_012920.1:m.4296G>A in MT-TI gene' for a mitochondrial variant).
+    A copy number variant gets 'Variant <HGVS>' only when its table has more than one;
+    the lab's reports describe a single CNV without a title line."""
+    gene = v.get("gene", "").strip()
+    k = kind(v)
+    if k == "cnv":
+        if not many:
+            return None
+        return [("Variant ", True, False, False), (v.get("variant", "").strip(), True, False, False)]
+    if k == "mito":
+        ident = _mito_ids(v, False)
+    else:
+        ident = _cdna(v) + (f" / {v['protein'].strip()}" if v.get("protein", "").strip() else "")
+    parts = [("Variant ", True, False, False), (ident, True, False, False)]
+    if gene:
+        parts += [(" in ", True, False, False), (gene, True, True, False), (" gene", True, False, False)]
+    return parts
+
+
 def _fill_description(head, stop, chosen: list[dict], conclusion: str, genes: list[str]) -> None:
     """The paragraphs between `head` (a 'Description of ...' heading) and `stop` become
-    each variant's title line and text, then the bold conclusion."""
+    each variant's title line, text and bold classification statement, then the bold
+    conclusion."""
     old = _between(head, stop)
     filled = [p for p in old if p.tag == qn("w:p") and text(p).strip()]
     if len(filled) < 2:
@@ -431,19 +686,20 @@ def _fill_description(head, stop, chosen: list[dict], conclusion: str, genes: li
     title_model, body_model = filled[0], filled[1]
     anchor = head
     for v in chosen:
-        gene = v.get("gene", "").strip()
-        ident = _cdna(v) + (f" / {v['protein'].strip()}" if v.get("protein", "").strip() else "")
-        title = _new_para(title_model, [("Variant ", True, False, False), (ident, True, False, False),
-                                        (" in ", True, False, False), (gene, True, True, False),
-                                        (" gene", True, False, False)])
-        _keep_next(title)
-        anchor.addnext(title)
-        anchor = title
-        for key in ("omim_phenotype", "evidence"):
-            for part in _paragraphs(v.get(key, "")):
-                p = _new_para(body_model, _with_genes(part, genes))
-                anchor.addnext(p)
-                anchor = p
+        parts = _title(v, len(chosen) > 1)
+        if parts:
+            title = _new_para(title_model, parts)
+            _keep_next(title)
+            anchor.addnext(title)
+            anchor = title
+        for part in _paragraphs(_description(v)):
+            p = _new_para(body_model, _with_genes(part, genes))
+            anchor.addnext(p)
+            anchor = p
+        for part in _paragraphs(v.get("statement", "")):
+            p = _new_para(body_model, _with_genes(part, genes, bold=True))
+            anchor.addnext(p)
+            anchor = p
     for part in _paragraphs(conclusion):
         p = _new_para(body_model, _with_genes(part, genes, bold=True))
         anchor.addnext(p)
@@ -484,11 +740,17 @@ def block_summary_default(chosen: list[dict]) -> str:
     out = []
     for v in chosen:
         label = vr.classification(v).strip()
-        kind = ("variant of uncertain significance" if "uncertain" in label.lower()
+        what = ("variant of uncertain significance" if "uncertain" in label.lower()
                 else f"{label.lower()} variant" if label else "variant")
         state = vr.allele_status(v).strip().lower()
         state = f" in a {state} state" if state and state != "-" else ""
-        out.append(f"A {kind} was identified in the {v.get('gene', '').strip()} gene{state}")
+        gene = v.get("gene", "").strip()
+        if kind(v) == "cnv":
+            what = what.replace("variant", "copy number variant")
+            where = f" overlapping the {gene} gene" if gene else ""
+            out.append(f"A {what} was identified{where}{state}")
+        else:
+            out.append(f"A {what} was identified in the {gene} gene{state}")
     return ". ".join(out) + " (see table below)." if out else ""
 
 
@@ -512,10 +774,80 @@ class _Block:
         self.region = [copy.deepcopy(el) for el in [table_head] + _between(table_head, mito)]
 
 
+def _heading_suffix(p, suffix: str) -> None:
+    """'Table detailing primary finding:' -> 'Table detailing primary finding (CNV):'."""
+    for t in p.iter(qn("w:t")):
+        if t.text and re.search(r"findings?", t.text):
+            t.text = re.sub(r"(findings?)", rf"\1 {suffix}", t.text, count=1)
+            return
+
+
+def _add_part(before, blk: _Block, chosen: list[dict], k: str, genes: list[str],
+              swap=("primary", "primary"), conclusion: str = "", suffix: str = "",
+              always_describe: bool = False) -> None:
+    """One table + description part (copies of the template's primary-finding table
+    heading, table, footnote and description) before `before`: the template's table
+    for sequence variants (k 'snv'), else a CNV or mitochondrial table in its format.
+    The description is left out when none of the variants has text (the lab often
+    gives only the table), unless `always_describe` or there is a conclusion."""
+    region = [copy.deepcopy(el) for el in blk.region]
+    for el in region:
+        if el.tag == qn("w:p"):
+            _swap_word(el, *swap)
+        before.addprevious(el)
+    table_head = region[0]
+    table = next(el for el in region if el.tag == qn("w:tbl"))
+    foot = next((el for el in region if el.tag == qn("w:p") and text(el).strip().startswith("* AR=")), None)
+    desc = next((el for el in region if el.tag == qn("w:p")
+                 and text(el).strip().lower().startswith("description of")), None)
+    if desc is None:
+        raise TemplateError("Template is missing: 'Description of primary finding' heading")
+    if k == "snv":
+        _fill_table(table, chosen)
+        if foot is not None:
+            _fill_footnote(foot, chosen)
+    else:
+        cols, rows = (CNV_COLUMNS, _cnv_rows(chosen)) if k == "cnv" else (MITO_COLUMNS, _mito_rows(chosen))
+        table.addprevious(_make_table(table, cols, rows))
+        _remove(table)
+        if foot is not None:            # the CNV / mito tables spell the inheritance out
+            _remove(foot)
+    heads = [table_head]
+    if always_describe or conclusion.strip() or any(_has_text(v) for v in chosen):
+        _fill_description(desc, before, chosen, conclusion, genes)
+        heads.append(desc)
+    else:
+        for el in [desc] + _between(desc, before):
+            _remove(el)
+    if k == "mito":
+        if len(chosen) > 1:
+            for h in heads:
+                for t in h.iter(qn("w:t")):
+                    if t.text and "variant" in t.text and "variants" not in t.text:
+                        t.text = t.text.replace("variant", "variants", 1)
+    else:
+        _plural_headings(heads, len(chosen))
+    if suffix:
+        for h in heads:
+            _heading_suffix(h, suffix)
+
+
+def _add_findings(before, blk: _Block, chosen: list[dict], genes: list[str], word: str = "primary",
+                  conclusion: str = "", always_describe: bool = False) -> None:
+    """The sequence-variant part then the CNV part of a findings block; with both,
+    their headings say '(SNV)' / '(CNV)'."""
+    snv = [v for v in chosen if kind(v) != "cnv"]
+    cnv = [v for v in chosen if kind(v) == "cnv"]
+    if snv:
+        _add_part(before, blk, snv, "snv", genes, ("primary", word), "" if cnv else conclusion,
+                  "(SNV)" if cnv else "", always_describe)
+    if cnv:
+        _add_part(before, blk, cnv, "cnv", genes, ("primary", word), conclusion, "(CNV)", always_describe)
+
+
 def _add_block(doc, blk: _Block, word: str, chosen: list[dict], summary: str, genes: list[str]) -> None:
-    """A '<Word> finding:' block (Summary, table, footnote, description) before the
-    Mitochondrial line. The description part is left out when none of its variants has
-    description text (the lab often gives only the table)."""
+    """A '<Word> finding:' block (Summary, then its sequence-variant and CNV tables and
+    descriptions) before the Mitochondrial line."""
     mito = _para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line")
     heading = copy.deepcopy(blk.heading)
     _swap_word(heading, "primary", word)
@@ -524,29 +856,50 @@ def _add_block(doc, blk: _Block, word: str, chosen: list[dict], summary: str, ge
     els += [_new_para(blk.summary_model, _with_genes(part, genes)) for part in _paragraphs(summary)]
     if blk.blank is not None:
         els.append(copy.deepcopy(blk.blank))
-    region = [copy.deepcopy(el) for el in blk.region]
-    for el in region:
-        if el.tag == qn("w:p"):
-            _swap_word(el, "primary", word)
-    for el in els + region:
+    for el in els:
         mito.addprevious(el)
-    table_head = region[0]
-    table = next(el for el in region if el.tag == qn("w:tbl"))
-    foot = next((el for el in region if el.tag == qn("w:p") and text(el).strip().startswith("* AR=")), None)
-    desc = next((el for el in region if el.tag == qn("w:p")
-                 and text(el).strip().lower().startswith("description of")), None)
-    if desc is None:
-        raise TemplateError("Template is missing: 'Description of primary finding' heading")
-    _fill_table(table, chosen)
-    if foot is not None:
-        _fill_footnote(foot, chosen)
-    if any(v.get(k, "").strip() for v in chosen for k in ("omim_phenotype", "evidence")):
-        _fill_description(desc, mito, chosen, "", genes)
-        _plural_headings([table_head, desc], len(chosen))
-    else:
-        for el in [desc] + _between(desc, mito):
-            _remove(el)
-        _plural_headings([table_head], len(chosen))
+    _add_findings(mito, blk, chosen, genes, word)
+
+
+def _add_mito(doc, blk: _Block, chosen: list[dict], summary: str, genes: list[str]) -> None:
+    """Mitochondrial variants reported: the 'Mitochondrial genome analysis:' line becomes
+    the heading of a block with its Summary, the mitochondrial variant table and the
+    description, as in the lab's reports; the ACMG mtDNA reference is added."""
+    m = _para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line")
+    set_para_tail(m, "")
+    stop = m.getnext()
+    els = [copy.deepcopy(blk.summary_head)]
+    els += [_new_para(blk.summary_model, _with_genes(part, genes)) for part in _paragraphs(summary)]
+    if blk.blank is not None:
+        els.append(copy.deepcopy(blk.blank))
+    for el in els:
+        stop.addprevious(el)
+    _add_part(stop, blk, chosen, "mito", genes, ("primary finding", "mitochondrial variant"),
+              always_describe=True)
+    if blk.blank is not None:           # gap before Recommendations
+        stop.addprevious(copy.deepcopy(blk.blank))
+    head = _para(doc, "REFERENCES", "'REFERENCES' heading")
+    refs = [el for el in _between(head, None) if el.tag == qn("w:p") and text(el).strip()]
+    if refs and not any("mitochondrial DNA variant interpretation" in text(r) for r in refs):
+        new = copy.deepcopy(refs[-1])
+        set_text(new, MITO_REFERENCE)
+        refs[-1].addnext(new)
+
+
+def _add_segment_tables(doc, blk: _Block, cnvs: list[dict]) -> None:
+    """'Table showing all genes in the involved segment' (Region | Type | Size | List of
+    genes) for the CNVs that have a gene list, above the signatory as the lab prints it."""
+    items = [v for v in cnvs if v.get("segment_genes", "").strip()]
+    if not items:
+        return
+    dr = _para(doc, "Dr.", "signatory line ('Dr.')")
+    head = copy.deepcopy(blk.region[0])
+    set_text(head, SEGMENT_HEADING)
+    proto = next(el for el in blk.region if el.tag == qn("w:tbl"))
+    gap = [copy.deepcopy(blk.blank)] if blk.blank is not None else []
+    els = [head] + gap + [_make_table(proto, SEGMENT_COLUMNS, _segment_rows(items))] + copy.deepcopy(gap)
+    for el in els:
+        dr.addprevious(el)
 
 
 def _fill_recommendations(doc, value: str) -> None:
@@ -593,29 +946,43 @@ def render_report(data: ReportData):
         raise TemplateError(f"Template file not found: {path}")
     doc = Document(path)
     ticked = [v for v in data.variants if v.get("selected")]
-    chosen = [v for v in ticked if _finding(v) == "primary"]
-    extra = [(word, [v for v in ticked if _finding(v) == key]) for key, word in EXTRA_BLOCKS]
+    mito = [v for v in ticked if kind(v) == "mito"]
+    nuclear = [v for v in ticked if kind(v) != "mito"]
+    chosen = [v for v in nuclear if _finding(v) == "primary"]
+    extra = [(word, [v for v in nuclear if _finding(v) == key]) for key, word in EXTRA_BLOCKS]
     extra = [(word, vs) for word, vs in extra if vs]
     genes = [v.get("gene", "").strip() for v in ticked]
     blk = _Block(doc)                   # before the primary parts are filled
     _fill_labels(doc, data)
     _fill_indication(doc, data)
     _fill_summary(doc, data.summary.strip() or summary_default(chosen), genes)
-    if chosen:
-        _fill_table(_table(doc, "Gene", "primary finding table")._tbl, chosen)
-        _fill_footnote(_para(doc, "* AR=", "the table's footnote"), chosen)
+    snv = [v for v in chosen if kind(v) == "snv"]
+    cnv = [v for v in chosen if kind(v) == "cnv"]
+    mito_line = lambda: _para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line")  # noqa: E731
+    if snv:     # the template's own table and description, filled in place
+        _fill_table(_table(doc, "Gene", "primary finding table")._tbl, snv)
+        _fill_footnote(_para(doc, "* AR=", "the table's footnote"), snv)
         desc = _para(doc, "Description of primary finding", "'Description of primary finding' heading")
-        _fill_description(desc, _para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line"),
-                          chosen, data.conclusion, genes)
-        _plural_headings([_para(doc, "Table detailing primary finding", "table heading"), desc], len(chosen))
+        _fill_description(desc, mito_line(), snv, "" if cnv else data.conclusion, genes)
+        heads = [_para(doc, "Table detailing primary finding", "table heading"), desc]
+        _plural_headings(heads, len(snv))
+        if cnv:
+            for h in heads:
+                _heading_suffix(h, "(SNV)")
     else:
-        _drop_findings(doc, data.conclusion, keep_heading=bool(extra))
+        _drop_findings(doc, "" if cnv else data.conclusion, keep_heading=bool(extra or cnv))
+    if cnv:
+        _add_part(mito_line(), blk, cnv, "cnv", genes, conclusion=data.conclusion, suffix="(CNV)",
+                  always_describe=True)
     for word, vs in extra:
         summary = getattr(data, f"{word}_summary", "").strip() or block_summary_default(vs)
         _add_block(doc, blk, word, vs, summary, genes)
-    set_para_tail(_para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line"),
-                  " ".join(data.mito.split()) or MITO_DEFAULT)
+    if mito:
+        _add_mito(doc, blk, mito, data.mito.strip() or mito_summary_default(mito), genes)
+    else:
+        set_para_tail(mito_line(), " ".join(data.mito.split()) or MITO_DEFAULT)
     _fill_recommendations(doc, data.recommendations)
+    _add_segment_tables(doc, blk, [v for v in nuclear if kind(v) == "cnv"])
     _fill_signatory(doc, data.signatory)
     for p in _body_paras(doc):
         if text(p).strip().startswith(_HEADINGS):

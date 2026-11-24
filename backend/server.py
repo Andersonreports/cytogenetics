@@ -9,12 +9,16 @@ import traceback
 
 from flask import Flask, jsonify, render_template, request, send_file
 
-from ..core import variants as vr
-from ..core.models import ReportData, today_str
-from ..core.pdf import docx_to_pdf, pdf_pages_png
-from ..core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_docx
+from .core import variants as vr
+from .core.models import ReportData, today_str
+from .core.pdf import docx_to_pdf, pdf_pages_png
+from .core.os_utils import resource_path
+from .core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_docx
+from .core.renderer import kind as variant_kind
 
-app = Flask(__name__, template_folder="templates")
+# The page (frontend/index.html) and its css / js files (served under /static).
+app = Flask(__name__, template_folder=resource_path("frontend"),
+            static_folder=resource_path("frontend"), static_url_path="/static")
 
 SAMPLES = ["Peripheral Blood", "DNA", "Amniotic fluid", "Product Of Conception", "CVS"]
 CLASSES = ["Pathogenic", "Likely Pathogenic", "Variant of Uncertain Significance",
@@ -69,6 +73,7 @@ def api_upload_variants():
         v["omim_phenotype"] = ""    # the description is typed by the user, not pre-filled
         # VarSeq's "Secondary Finding" flag (or a "Secondary Findings" block) -> that block
         v["finding"] = "secondary" if vr.is_secondary(v) else ""
+        v["kind"] = "" if variant_kind(v) == "snv" else variant_kind(v)     # chrM -> a mitochondrial variant
         v.setdefault("gene_name", "")
         v.setdefault("hgnc", "")
         v.setdefault("consequence", "")

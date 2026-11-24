@@ -9,8 +9,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.core.models import PatientInfo, ReportData  # noqa: E402
-from app.core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_report  # noqa: E402
+from backend.core.models import PatientInfo, ReportData  # noqa: E402
+from backend.core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_report  # noqa: E402
 
 VARIANT = {
     "gene": "DPYD", "nm_id": "NM_000110.4", "variant": "c.1905+1G>A", "protein": "NP_000101.2:p.(?)",
@@ -79,6 +79,18 @@ class RenderTests(unittest.TestCase):
         self.assertIn("Table detailing primary findings:", texts)
         self.assertIn("Description of primary findings:", texts)
 
+    def test_old_omim_sentence_left_out(self):
+        """A form saved by an older version still holds the pre-filled OMIM sentence:
+        only the bold title line is printed."""
+        auto = "Dihydropyrimidine dehydrogenase deficiency (OMIM#274270) is caused by mutation in the DPYD gene (OMIM*612779)."
+        doc = render_report(self.data([dict(VARIANT, omim_phenotype=auto, omim_phenotype_prefix=auto,
+                                            evidence="")]))
+        texts = [t.strip() for t in _texts(doc)]
+        title = "Variant NM_000110.4:c.1905+1G>A / NP_000101.2:p.(?) in DPYD gene"
+        self.assertIn(title, texts)
+        self.assertNotIn(auto, texts)
+        self.assertTrue(texts[texts.index(title) + 1].startswith("Mitochondrial genome analysis"))
+
     def test_without_variant(self):
         d = self.data([dict(VARIANT, selected=False)])
         d.recommendations = ""
@@ -93,13 +105,13 @@ class RenderTests(unittest.TestCase):
 
 class ApiTests(unittest.TestCase):
     def test_init_and_page(self):
-        from app.web.server import app
+        from backend.server import app
         c = app.test_client()
         self.assertEqual(c.get("/").status_code, 200)
         self.assertIn("today", c.get("/api/init").get_json())
 
     def test_export_docx(self):
-        from app.web.server import app
+        from backend.server import app
         c = app.test_client()
         r = c.post("/api/export", json={"kind": "docx", "data": RenderTests().data([VARIANT]).to_dict()})
         self.assertEqual(r.status_code, 200)
@@ -148,13 +160,71 @@ class ExtraBlockTests(unittest.TestCase):
         self.assertIn("Description of incidental finding:", texts)
 
 
+CNV = {"kind": "cnv", "gene": "DMD", "variant": "NC_000023.11:g.(?_31874949)_(31968677_?)del",
+       "zygosity": "Hemizygous", "size": "93.73 kb", "disease": "Becker muscular dystrophy",
+       "inheritance": "XLR", "classification": "Pathogenic", "criteria": "1A, 2E",
+       "evidence": "A hemizygous copy number loss is observed on chromosome X.",
+       "statement": "Based on the available evidence, this variant is classified as pathogenic.",
+       "segment_genes": "DMD", "selected": True}
+MITO = {"kind": "mito", "gene": "MT-TI", "variant": "4296G>A", "heteroplasmy": "80.46",
+        "disease": "Mitochondrial disease", "classification": "Variant of Uncertain Significance",
+        "criteria": "PM2_Supporting", "evidence": "MT-TI encodes a tRNA.", "selected": True}
+
+
+class CnvMitoTests(unittest.TestCase):
+    """Copy number and mitochondrial variants, as in the lab's CNV / mtDNA reports."""
+
+    def test_cnv_only(self):
+        doc = render_report(RenderTests().data([dict(CNV)]))
+        texts = [t.strip() for t in _texts(doc)]
+        self.assertIn("Primary finding:", texts)
+        self.assertNotIn("Table detailing primary finding:", texts)
+        self.assertIn("Table detailing primary finding (CNV):", texts)
+        self.assertIn("Description of primary finding (CNV):", texts)
+        self.assertTrue(any(t.startswith("Sequencing data was indicative of the following pathogenic copy "
+                                         "number variant (CNV) overlapping the DMD gene") for t in texts))
+        self.assertIn(CNV["statement"], texts)
+        rows = _table_text(doc, "VARIANT")
+        self.assertEqual(rows[0][5], "ACMG/ClinGen classification")
+        self.assertEqual(rows[1][:3], [CNV["variant"], "Hemizygous", "93.73 kb"])
+        self.assertIn("recessive", rows[1][4])
+        seg = _table_text(doc, "REGION")
+        self.assertEqual(seg[1][1:], ["Loss", "93.73 kb", "DMD"])
+        self.assertLess(texts.index("Table showing all genes in the involved segment:"), next(i for i, t in enumerate(texts) if t.startswith("Dr. B")))
+
+    def test_snv_and_cnv(self):
+        texts = [t.strip() for t in _texts(render_report(RenderTests().data([dict(VARIANT), dict(CNV)])))]
+        order = ["Table detailing primary finding (SNV):", "Description of primary finding (SNV):",
+                 "Table detailing primary finding (CNV):", "Description of primary finding (CNV):"]
+        pos = [texts.index(t) for t in order]
+        self.assertEqual(pos, sorted(pos))
+
+    def test_mito(self):
+        doc = render_report(RenderTests().data([dict(VARIANT), dict(MITO)]))
+        texts = [t.strip() for t in _texts(doc)]
+        self.assertIn("Mitochondrial genome analysis:", texts)
+        self.assertIn("A variant of uncertain significance was identified in the mitochondrial gene MT-TI at "
+                      "a heteroplasmy level of 80.46% (see table and description below).", texts)
+        self.assertIn("Variant NC_012920.1:m.4296G>A in MT-TI gene", texts)
+        self.assertLess(texts.index("Description of mitochondrial variant:"), texts.index("Recommendations"))
+        rows = [r for r in (_table_text(doc, "GENE"),)][0]      # the primary table: DPYD only
+        self.assertEqual(len(rows), 2)
+        mt = [t for t in doc.tables if t.rows[0].cells[0].text.strip() == "Gene"
+              and t.rows[0].cells[2].text.strip() == "DNA source"][0]
+        cells = [c.text for c in mt.rows[1].cells]
+        self.assertIn("NC_012920.1(MT-TI):m.4296G>A", cells[1])
+        self.assertEqual(cells[2], "Blood")
+        self.assertEqual(cells[4], "Heteroplasmy\n(80.46%)")
+        self.assertTrue(any("mitochondrial DNA variant interpretation" in t for t in texts))
+
+
 class RawExportTests(unittest.TestCase):
     """The full VarSeq table export: title row, column-group row, column-name row."""
 
     def test_reads_table_fields(self):
         import tempfile
         from openpyxl import Workbook
-        from app.core import renderer, variants as vr
+        from backend.core import renderer, variants as vr
         cols = [  # (group, name, value); made-up variant, no patient data
             ("Complex Variants x.vcf.gz", "Variant Allele Fraction", None),   # empty INFO block
             ("", "Allelic Depths (AD)", None),

@@ -48,6 +48,23 @@ private instance) or **LibreOffice**.
    and a description only if one of its variants has description text. With only
    Secondary / Incidental variants ticked, "Primary finding:" stays with the
    no-variant summary.
+   **Type of variant** (top of the variant editor) picks how it is reported, as in the
+   lab's reports:
+   * *Sequence variant* (default): the table above.
+   * *Copy number variant*: its own table (Variant | Zygosity | Size | Disease |
+     Inheritance | ACMG/ClinGen classification) and description after the block's
+     sequence variants, headed "(CNV)" (and those "(SNV)" when a block has both). A
+     *Genes in the involved segment* list adds the "Table showing all genes in the
+     involved segment" (Region | Gain/Loss | Size | genes) above the signature.
+   * *Mitochondrial variant* (chrM rows of the Excel start as this): the
+     "Mitochondrial genome analysis:" line becomes a block with its Summary (the
+     *Mitochondrial genome analysis* box, blank = built from the variant), the table
+     (Gene | NC_012920.1(gene):m. | DNA source | Disease | Heteroplasmy (level %) |
+     classification) and the description; the ACMG mtDNA reference (McCormick 2020) is
+     added to the References.
+   Each variant's *Classification statement* (e.g. "Based on ACMG criteria, this variant
+   is classified as Pathogenic.", *Suggest from classification* fills one) is printed in
+   bold after its evidence.
 4. **Result text** - Summary (blank = built from the ticked variants, or a
    no-variant sentence), Conclusion (bold), Mitochondrial genome analysis (blank =
    "No variant that warrants reporting was identified."), Recommendations (blank =
@@ -62,25 +79,38 @@ Limitations, Disclaimers, Test methodology and References are fixed template tex
 
 ## Project layout
 
+```
+frontend/    the web page the user works in
+backend/     Python: the Flask server and the report logic
+database/    data tables the backend reads (OMIM; not in git)
+assets/      the Word report template
+samples/     local patient files for testing (not in git)
+tests/
+```
+
 | Path | Purpose |
 |---|---|
-| `app/main.py` | entry point: starts the server, opens the browser |
-| `app/web/server.py` | Flask routes: init, variants upload, preview, export |
-| `app/web/templates/index.html` | the whole UI (plain HTML/CSS/JS) |
-| `app/core/renderer.py` | fills the Word template from a `ReportData` |
-| `app/core/models.py` | `ReportData`, `PatientInfo` |
-| `app/core/variants.py` | reads the VarSeq Excel; variant wording helpers (shared code with the CMC report automation tool) |
-| `app/core/pdf.py` | DOCX -> PDF (Word / LibreOffice), PDF -> preview images |
-| `app/core/docx_utils.py` | small Word XML helpers |
-| `app/templates/cmc_cytogenetics.docx` | the report template |
-| `app/data/omim_*.txt` | OMIM gene / phenotype tables (`genemap2.txt`, `mim2gene.txt` from omim.org, renamed). Licensed, so not in git: copy them in before running or building. Without them the OMIM numbers / diseases are not suggested. |
+| `frontend/index.html` | the form page (layout) |
+| `frontend/css/style.css` | its styles |
+| `frontend/js/app.js` | its behaviour: variants list / editor, preview, export, drafts |
+| `backend/main.py` | entry point (`python -m backend.main`): starts the server, opens the browser |
+| `backend/server.py` | Flask routes: page, init, variants upload, preview, export; serves `frontend/` |
+| `backend/core/renderer.py` | fills the Word template from a `ReportData` |
+| `backend/core/models.py` | `ReportData`, `PatientInfo` |
+| `backend/core/variants.py` | reads the VarSeq Excel; variant wording helpers (shared code with the CMC report automation tool) |
+| `backend/core/pdf.py` | DOCX -> PDF (Word / LibreOffice), PDF -> preview images |
+| `backend/core/docx_utils.py` | small Word XML helpers |
+| `backend/core/os_utils.py` | paths to the bundled folders (source and exe), LibreOffice lookup |
+| `database/omim_*.txt` | OMIM gene / phenotype tables. Licensed, so not in git: see `database/README.md`. Without them the OMIM numbers / diseases are not suggested. |
+| `assets/cmc_cytogenetics.docx` | the report template |
+| `samples/` | VarSeq Excel files and finished reports used for testing. Patient data: git-ignored, never commit. |
 | `tests/test_render.py` | smoke tests (`python -m unittest`) |
 
 ## Editing the template
 
-`app/templates/cmc_cytogenetics.docx` can be edited in Word. The renderer finds
+`assets/cmc_cytogenetics.docx` can be edited in Word. The renderer finds
 its parts by their text, so keep: the table whose first cell is `NAME`, the
-`INDICATION:` box, the headings `Summary:`, `Primary finding:`,
+`INDICATION:` box, the headings `Summary:`, `REFERENCES`, `Primary finding:`,
 `Table detailing primary finding:`, `Description of primary finding:`,
 `Recommendations`, the line starting `Mitochondrial genome analysis`, the table
 whose first cell is `Gene` (header row + one sample row, used as the row format),
