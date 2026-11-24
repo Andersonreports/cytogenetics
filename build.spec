@@ -13,6 +13,13 @@ a = Analysis(
            ("database", "database")],
     hiddenimports=["docx", "openpyxl", "pypdfium2", "PIL", "win32com.client", "pythoncom"],
 )
+import os
+import sys
+if sys.platform.startswith("linux"):
+    # The C++ runtime is on every Linux PC: use the PC's own. The build machine's copy
+    # needs a newer glibc and would stop the program from starting on older distros.
+    a.binaries = [b for b in a.binaries
+                  if not os.path.basename(b[0]).startswith(("libstdc++.so", "libgcc_s.so"))]
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.datas, [],

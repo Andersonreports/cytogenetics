@@ -147,7 +147,7 @@ its parts by their text, so keep: the table whose first cell is `NAME`, the
 whose first cell is `Gene` (header row + one sample row, used as the row format),
 its footnote starting `* AR=` and the signatory line starting `Dr.`.
 
-## Build the exe
+## Build the exe (Windows) and the Linux version
 
 ```bat
 pip install -r requirements.txt -r requirements-build.txt
@@ -155,6 +155,21 @@ build.bat            :: -> dist\CMCCytogeneticsReport.exe
 ```
 
 The exe opens a console window showing the address; closing it stops the tool.
+
+A Windows .exe does not run on Linux, so Linux gets its own build:
+
+```bat
+wsl.exe -d Ubuntu --exec bash build_linux.sh   :: (or ./build_linux.sh on Linux)
+                                               :: -> dist\CMCCytogeneticsReport-linux.tar.gz
+```
+
+It runs on Ubuntu 18.04 or newer (glibc 2.27); on the Linux PC install LibreOffice
+(`sudo apt install libreoffice-writer`) for the preview and PDF, extract the archive
+and run `./CMCCytogeneticsReport` (instructions in its README.txt).
+
+Both builds contain only the blank template from `assets/` (never `assets/WES report
+template/` or `samples/`) and the OMIM tables from `database/` (licensed: share the
+builds with CMC staff only).
 
 ## Tests
 
