@@ -74,7 +74,7 @@ textarea{resize:vertical;min-height:64px}
 .vlist-head label{flex:1;margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer}
 .vlist-toggle{background:var(--surface);border:1.5px solid var(--line);border-radius:5px;cursor:pointer;padding:2px 8px;font-size:15px;font-weight:700;line-height:1;color:var(--ink)}
 .vlist-toggle:hover{border-color:var(--accent)}
-#vlist{flex:1;overflow-y:auto;max-height:560px}
+#vlist{flex:none;overflow-y:auto;max-height:560px}
 .vitem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
 .vitem:hover{background:var(--surface-2)}
 .vitem.active{background:#e4f0f4}
@@ -83,7 +83,7 @@ textarea{resize:vertical;min-height:64px}
 .vitem-label .gene{margin-right:4px}
 .vitem .tag{margin-left:auto;flex:none;font-size:10px}
 .vitem .tag+.tag{margin-left:4px}
-.vlist-foot{padding:8px 10px;border-top:1px solid var(--line)}
+.vlist-foot{padding:8px 10px}
 .vdetail-col{flex:1;min-width:0;padding:14px 16px}
 .vempty{color:var(--muted);font-size:12px;padding:40px 20px;text-align:center}
 .gene{font-style:italic;font-weight:700}
