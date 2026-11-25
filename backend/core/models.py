@@ -41,7 +41,7 @@ class ReportData:
     summary: str = ""            # blank = built from the ticked variants
     secondary_summary: str = ""  # Summary of the Secondary finding block; blank = built
     incidental_summary: str = "" # Summary of the Incidental finding block; blank = built
-    conclusion: str = ""         # bold paragraph(s) after the variant descriptions
+    conclusion: str = ""         # paragraph(s) after the variant descriptions (**bold** as typed)
     mito: str = ""               # blank = "No variant that warrants reporting was identified."
     recommendations: str = ""    # blank = no Recommendations section
     signatory: str = ""          # "Dr. Name\nDesignation"; blank = "Dr." left to fill

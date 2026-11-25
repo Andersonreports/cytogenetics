@@ -1,0 +1,18 @@
+# The web version: docker compose up -d --build   (see DEPLOY.md)
+services:
+  cyto:
+    build: .
+    image: cmc-cyto-report:latest
+    restart: unless-stopped
+    # Only this server can reach it; nginx (deploy/nginx.conf) serves it over HTTPS.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      CYTO_HTTPS: "1"            # sign-in cookie only over https; "0" for plain http (test only)
+      CYTO_BEHIND_PROXY: "1"     # user's address / https from nginx's X-Forwarded-* headers
+    volumes:
+      - cyto_data:/data                   # user accounts + cookie key: back this up
+      - ./database:/app/database:ro       # OMIM tables (licensed; optional)
+
+volumes:
+  cyto_data:

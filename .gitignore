@@ -27,3 +27,7 @@ dist/
 
 # OMIM data: licensed, not for redistribution; copy into database/ locally (see database/README.md)
 database/omim_*.txt
+
+# Sign-in accounts (password hashes) and the cookie key: local to each install, never commit
+/instance/
+cyto_data/

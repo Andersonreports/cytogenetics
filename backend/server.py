@@ -7,8 +7,9 @@ import tempfile
 import threading
 import traceback
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, g, jsonify, render_template, request, send_file
 
+from . import auth
 from .core import variants as vr
 from .core.models import ReportData, today_str
 from .core.pdf import docx_to_pdf, pdf_pages_png
@@ -19,6 +20,8 @@ from .core.renderer import kind as variant_kind
 # The page (frontend/index.html) and its css / js files (served under /static).
 app = Flask(__name__, template_folder=resource_path("frontend"),
             static_folder=resource_path("frontend"), static_url_path="/static")
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024     # Excel uploads / report data
+auth.init_app(app)      # every page and API call needs a signed-in user (backend/auth.py)
 
 CLASSES = ["Pathogenic", "Likely Pathogenic", "Variant of Uncertain Significance",
            "Pathogenic (carrier state)", "Drug response", "Likely Benign", "Benign"]
@@ -36,7 +39,7 @@ def _error(e: Exception, status: int = 500):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", user=g.user, is_admin=g.get("is_admin", False))
 
 
 @app.route("/api/init")

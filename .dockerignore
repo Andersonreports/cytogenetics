@@ -1,0 +1,21 @@
+# Only backend/, frontend/, the blank template and the requirements go into the image:
+# never patient files, accounts or the licensed OMIM tables.
+.git
+.venv
+**/__pycache__
+*.pyc
+build/
+dist/
+samples/
+instance/
+cyto_data/
+database/
+tests/
+deploy/
+*.docx
+*.pdf
+*.xlsx
+*.xlsm
+*_draft.json
+assets/
+!assets/cmc_cytogenetics.docx

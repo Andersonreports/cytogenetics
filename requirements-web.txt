@@ -1,0 +1,3 @@
+# The web version (Linux server, see DEPLOY.md): the tool's requirements + gunicorn.
+-r requirements.txt
+gunicorn>=22.0.0

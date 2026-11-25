@@ -16,5 +16,8 @@ template), `samples/` (patient test files, git-ignored).
   position; keep the headings listed in README "Editing the template".
 - Patient files (.docx/.pdf/.xlsx, drafts; `samples/`) contain patient data: never
   commit them (see .gitignore). The OMIM files are licensed: never commit them either.
+- Sign-in (`backend/auth.py`): every page and `/api/` call needs a user. Accounts and the
+  cookie key are in the data folder (`instance/` or `cyto_data/` next to the exe): never
+  commit or bundle them. Tests use a temp folder via `tests/helpers.py`.
 - Verify output by rendering to PDF (`backend.core.pdf.docx_to_pdf`) and looking at the
   pages, not just the docx text.

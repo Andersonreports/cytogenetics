@@ -149,6 +149,11 @@ def _base_rpr(model):
     if src is None:
         ppr = model.find(qn("w:pPr"))
         src = ppr.find(qn("w:rPr")) if ppr is not None else None
+    return _plain_rpr(src)
+
+
+def _plain_rpr(src):
+    """A copy of run format `src` without bold / italic / underline / superscript."""
     rpr = copy.deepcopy(src) if src is not None else OxmlElement("w:rPr")
     for tag in ("w:b", "w:bCs", "w:i", "w:iCs", "w:u", "w:vertAlign"):
         for el in rpr.findall(qn(tag)):
@@ -428,7 +433,7 @@ def _fill_summary_at(head, stop, value: str, genes: list[str]) -> None:
         raise TemplateError("Template is missing the Summary paragraph")
     anchor = head
     for part in _paragraphs(value):
-        p = _new_para(model, _with_genes(part, genes))
+        p = _new_para(model, _rich(part, genes))
         anchor.addnext(p)
         anchor = p
     if blank is not None:
@@ -805,8 +810,8 @@ def _title(v: dict, many: bool):
 
 def _fill_description(head, stop, chosen: list[dict], conclusion: str, genes: list[str]) -> None:
     """The paragraphs between `head` (a 'Description of ...' heading) and `stop` become
-    each variant's title line, text and bold classification statement, then the bold
-    conclusion."""
+    each variant's title line, text and bold classification statement, then the
+    conclusion (bold where typed bold)."""
     old = _between(head, stop)
     filled = [p for p in old if p.tag == qn("w:p") and text(p).strip()]
     if len(filled) < 2:
@@ -832,7 +837,7 @@ def _fill_description(head, stop, chosen: list[dict], conclusion: str, genes: li
             anchor.addnext(p)
             anchor = p
     for part in _paragraphs(conclusion):
-        p = _new_para(body_model, _with_genes(part, genes, bold=True))
+        p = _new_para(body_model, _rich(part, genes))
         anchor.addnext(p)
         anchor = p
     for el in old:
@@ -851,7 +856,7 @@ def _drop_findings(doc, conclusion: str, keep_heading: bool = False) -> None:
     for el in [start] + _between(start, stop):
         _remove(el)
     for part in _paragraphs(conclusion):
-        stop.addprevious(_new_para(model, [(part, True, False, False)]))
+        stop.addprevious(_new_para(model, _rich(part, [])))
 
 
 # The extra finding blocks, in report order: (variant "finding" value, heading word).
@@ -1038,7 +1043,7 @@ def _add_block(doc, blk: _Block, word: str, chosen: list[dict], summary: str, ge
     _swap_word(heading, "primary", word)
     els = [copy.deepcopy(blk.blank)] if blk.blank is not None else []    # gap above the block
     els += [heading, copy.deepcopy(blk.summary_head)]
-    els += [_new_para(blk.summary_model, _with_genes(part, genes)) for part in _paragraphs(summary)]
+    els += [_new_para(blk.summary_model, _rich(part, genes)) for part in _paragraphs(summary)]
     if blk.blank is not None:
         els.append(copy.deepcopy(blk.blank))
     for el in els:
@@ -1054,7 +1059,7 @@ def _add_mito(doc, blk: _Block, chosen: list[dict], summary: str, genes: list[st
     set_para_tail(m, "")
     stop = m.getnext()
     els = [copy.deepcopy(blk.summary_head)]
-    els += [_new_para(blk.summary_model, _with_genes(part, genes)) for part in _paragraphs(summary)]
+    els += [_new_para(blk.summary_model, _rich(part, genes)) for part in _paragraphs(summary)]
     if blk.blank is not None:
         els.append(copy.deepcopy(blk.blank))
     for el in els:
@@ -1087,6 +1092,23 @@ def _add_segment_tables(doc, blk: _Block, cnvs: list[dict]) -> None:
         dr.addprevious(el)
 
 
+def _set_tail_rich(p, value: str) -> None:
+    """set_para_tail with **bold** / <i>italic</i> spans in `value` kept as such."""
+    set_para_tail(p, "")
+    rs = runs(p)
+    if len(rs) < 2 or text(rs[-1]):     # no plain tail run after the bold lead-in
+        set_para_tail(p, re.sub(r"\*\*|</?i>", "", value))
+        return
+    tail = rs[-1]
+    rpr = _plain_rpr(tail.find(qn("w:rPr")))
+    anchor = tail
+    for t, b, i, sup in _rich(value, []):
+        r = _run(rpr, t, b, i, sup)
+        anchor.addnext(r)
+        anchor = r
+    tail.getparent().remove(tail)
+
+
 def _fill_recommendations(doc, value: str) -> None:
     head = _para(doc, "Recommendations", "'Recommendations' heading")
     stop = _para(doc, "Dr.", "signatory line ('Dr.')")
@@ -1100,7 +1122,7 @@ def _fill_recommendations(doc, value: str) -> None:
     model = old[0] if old else head
     anchor = head
     for part in parts:
-        p = _new_para(model, _plain(part))
+        p = _new_para(model, _rich(part, []))
         anchor.addnext(p)
         anchor = p
     for el in old:
@@ -1180,7 +1202,7 @@ def render_report(data: ReportData):
     if mito:
         _add_mito(doc, blk, mito, data.mito.strip() or mito_summary_default(mito), genes)
     else:
-        set_para_tail(mito_line(), " ".join(data.mito.split()) or MITO_DEFAULT)
+        _set_tail_rich(mito_line(), " ".join(data.mito.split()) or MITO_DEFAULT)
     _fill_recommendations(doc, data.recommendations)
     _add_segment_tables(doc, blk, [v for v in nuclear if kind(v) == "cnv"])
     _fill_signatory(doc, data.signatory)

@@ -6,10 +6,21 @@
 <title>CMC Cytogenetics Report</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body data-user="{{ user }}">
 <header>
   <h1>CMC Cytogenetics Report</h1>
   <span class="sub">NGS-WES (Whole Exome &amp; Mitochondrial) · Department of Cytogenetics, CMC Vellore</span>
+  <details class="user-menu">
+    <summary class="btn ghost" title="Signed in as {{ user }}">{{ user }} &#9662;</summary>
+    <div class="user-menu-list">
+      {% if is_admin %}<a href="{{ url_for('auth.admin') }}">Users</a>{% endif %}
+      <a href="{{ url_for('auth.account') }}">Change password</a>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button type="submit">Log out</button>
+      </form>
+    </div>
+  </details>
   <button class="btn ghost clear" id="clear-btn" title="Clear all form data and start a new report">Clear</button>
   <button class="btn ghost" id="save-draft">Save draft</button>
   <label class="btn ghost" style="margin:0;color:#fff">Load draft<input type="file" id="load-draft" accept=".json" hidden></label>
@@ -153,7 +164,7 @@
       <div class="full" data-box="incidental_summary"><label for="f-incidental_summary">Incidental finding — Summary <button class="linkbtn rebuild" type="button" data-rebuild="incidental_summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
         <textarea id="f-incidental_summary" data-f="incidental_summary" style="min-height:90px"></textarea>
         <p class="hint auto-hint" data-auto-hint="incidental_summary"></p></div>
-      <div class="full"><label for="f-conclusion">Conclusion <span class="hint">(bold, after the variant descriptions)</span></label>
+      <div class="full"><label for="f-conclusion">Conclusion <span class="hint">(after the variant descriptions)</span></label>
         <textarea id="f-conclusion" data-f="conclusion" placeholder="e.g. While this variant is an established variant …, its relevance to the indication for testing in this patient is uncertain."></textarea></div>
       <div class="full" data-box="mito"><label for="f-mito">Mitochondrial genome analysis <button class="linkbtn rebuild" type="button" data-rebuild="mito" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
         <textarea id="f-mito" data-f="mito" style="min-height:52px"></textarea>

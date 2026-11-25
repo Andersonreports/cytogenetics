@@ -8,6 +8,14 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-
 header{background:linear-gradient(90deg,#1b2a4e,#2c4a86);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 18px;flex-wrap:wrap}
 header h1{font-size:17px;margin:0 12px 0 0;font-weight:700;letter-spacing:.2px}
 header .sub{opacity:.8;font-size:12px;margin-right:auto}
+/* The signed-in user's menu (Users / Change password / Log out) */
+.user-menu{position:relative}
+.user-menu summary{list-style:none}
+.user-menu summary::-webkit-details-marker{display:none}
+.user-menu-list{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:170px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 6px 20px rgba(20,40,60,.18);padding:4px 0}
+.user-menu-list a,.user-menu-list button{display:block;width:100%;text-align:left;padding:8px 14px;border:none;background:none;color:var(--ink);font:inherit;font-size:13px;text-decoration:none;cursor:pointer}
+.user-menu-list a:hover,.user-menu-list button:hover{background:var(--surface-2)}
+.user-menu-list form{margin:0;border-top:1px solid var(--line)}
 .btn{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--radius);padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 .btn:hover{background:var(--surface-2)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -99,6 +107,8 @@ textarea{resize:vertical;min-height:64px}
 .rich{min-height:220px;padding:9px 11px;font-size:13.5px;line-height:1.5;outline:none;white-space:pre-wrap}
 .rich>div{margin:0 0 .7em}
 .rich:empty::before{content:attr(data-placeholder);color:var(--muted)}
+/* The Result-text boxes use the same editor (smaller) */
+.rich.rich-field{min-height:70px;font-size:14px}
 #veditor .grid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .ve-status{font-size:12px;color:var(--muted);margin-bottom:10px}
 .ve-status .gene{color:var(--ink)}

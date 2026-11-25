@@ -1,0 +1,60 @@
+{% extends "auth/base.html" %}
+{% block title %}Users{% endblock %}
+{% block card_class %}wide{% endblock %}
+{% block content %}
+<h2>Users</h2>
+<table class="users">
+  <thead><tr><th>User</th><th>Role</th><th>Added</th><th>Reset password</th><th></th></tr></thead>
+  <tbody>
+  {% for name, u in users %}
+    <tr>
+      <td><b>{{ name }}</b>{% if name == g.user %} <span class="hint">(you)</span>{% endif %}</td>
+      <td>
+        <form method="post" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="name" value="{{ name }}">
+          {% if u.admin %}
+            Admin <button class="linkbtn" name="action" value="remove_admin" type="submit">make user</button>
+          {% else %}
+            User <button class="linkbtn" name="action" value="make_admin" type="submit">make admin</button>
+          {% endif %}
+        </form>
+      </td>
+      <td class="hint">{{ u.created }}</td>
+      <td>
+        <form method="post" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="name" value="{{ name }}">
+          <input type="password" name="password" placeholder="New password" minlength="{{ min_password }}"
+                 autocomplete="new-password" required>
+          <button class="btn small" name="action" value="reset" type="submit">Set</button>
+        </form>
+      </td>
+      <td>
+        {% if name != g.user %}
+        <form method="post" class="inline-form" onsubmit="return confirm('Remove the user {{ name }}?')">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="name" value="{{ name }}">
+          <button class="btn small danger" name="action" value="delete" type="submit">Remove</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3>Add a user</h3>
+<form method="post" class="add-user">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="add">
+  <div><label for="new-name">User name</label>
+    <input type="text" id="new-name" name="name" autocomplete="off" autocapitalize="none" required></div>
+  <div><label for="new-pw">Password <span class="hint">(at least {{ min_password }})</span></label>
+    <input type="password" id="new-pw" name="password" autocomplete="new-password" minlength="{{ min_password }}" required></div>
+  <label class="check"><input type="checkbox" name="admin" value="1"> Admin</label>
+  <button class="btn primary" type="submit">Add user</button>
+</form>
+<p class="hint">Admins can add and remove users and reset passwords. Each person can change their own
+  password under “Password” on the report page.</p>
+{% endblock %}

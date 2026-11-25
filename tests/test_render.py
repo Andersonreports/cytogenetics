@@ -9,6 +9,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from helpers import signed_in_client  # noqa: E402  (also: test accounts in a temp folder)
+
 from backend.core.models import PatientInfo, ReportData  # noqa: E402
 from backend.core.renderer import MITO_DEFAULT, NO_VARIANT_SUMMARY, file_stem, render_report  # noqa: E402
 
@@ -79,6 +81,37 @@ class RenderTests(unittest.TestCase):
         self.assertIn("Table detailing primary findings:", texts)
         self.assertIn("Description of primary findings:", texts)
 
+    def test_result_text_bold_and_italic(self):
+        """**bold** and <i>italic</i> typed in the Result-text boxes print as such."""
+        def styled(doc, start):
+            p = next(p for p in doc.paragraphs if p.text.startswith(start))
+            return [(r.text, bool(r.bold), bool(r.italic)) for r in p.runs if r.text]
+
+        fields = dict(summary="Sum **strong** and <i>slanted</i> text.",
+                      conclusion="Concl with <i>italic</i> and **bold** part.",
+                      mito="Mito **none** found.",
+                      recommendations="Rec <i>advice</i> here.")
+        for variants in ([dict(VARIANT)], []):
+            data = self.data(variants)
+            for k, v in fields.items():
+                setattr(data, k, v)
+            doc = render_report(data)
+            texts = _texts(doc)
+            for t in texts:
+                self.assertNotIn("**", t)
+                self.assertNotIn("<i>", t)
+            self.assertIn(("strong", True, False), styled(doc, "Sum "))
+            self.assertIn(("slanted", False, True), styled(doc, "Sum "))
+            concl = styled(doc, "Concl with")
+            self.assertEqual(concl[0], ("Concl with ", False, False))   # printed as typed
+            self.assertIn(("italic", False, True), concl)
+            self.assertIn(("bold", True, False), concl)
+            self.assertIn("Mitochondrial genome analysis: Mito none found.", texts)
+            mito = styled(doc, "Mitochondrial genome analysis")
+            self.assertIn(("none", True, False), mito)
+            self.assertIn((" found.", False, False), mito)
+            self.assertIn(("advice", False, True), styled(doc, "Rec "))
+
     def test_old_omim_sentence_left_out(self):
         """A form saved by an older version still holds the pre-filled OMIM sentence:
         only the bold title line is printed."""
@@ -105,14 +138,12 @@ class RenderTests(unittest.TestCase):
 
 class ApiTests(unittest.TestCase):
     def test_init_and_page(self):
-        from backend.server import app
-        c = app.test_client()
+        c = signed_in_client()
         self.assertEqual(c.get("/").status_code, 200)
         self.assertIn("today", c.get("/api/init").get_json())
 
     def test_export_docx(self):
-        from backend.server import app
-        c = app.test_client()
+        c = signed_in_client()
         r = c.post("/api/export", json={"kind": "docx", "data": RenderTests().data([VARIANT]).to_dict()})
         self.assertEqual(r.status_code, 200)
         self.assertIn("Test_Patient_WES_", r.headers["Content-Disposition"])
@@ -333,9 +364,8 @@ class SummaryTests(unittest.TestCase):
             "Whole exome and mitochondrial sequencing did not detect any pathogenic / likely pathogenic"))
 
     def test_defaults_api(self):
-        from backend.server import app
         data = RenderTests().data([dict(VARIANT), dict(VARIANT, gene="HBB", finding="incidental")]).to_dict()
-        j = app.test_client().post("/api/defaults", json={"data": data}).get_json()
+        j = signed_in_client().post("/api/defaults", json={"data": data}).get_json()
         self.assertTrue(j["summary"].startswith("Whole exome analysis in this sample shows the following "
                                                 "pathogenic variant in the DPYD gene"))
         self.assertIn("HBB gene", j["incidental_summary"])

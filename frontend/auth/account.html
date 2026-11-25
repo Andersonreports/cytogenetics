@@ -1,0 +1,17 @@
+{% extends "auth/base.html" %}
+{% block title %}Change password{% endblock %}
+{% block content %}
+<h2>Change your password</h2>
+<form method="post" action="{{ url_for('auth.account') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="text" name="username" value="{{ g.user }}" autocomplete="username" hidden>
+  <label for="current">Current password</label>
+  <input type="password" id="current" name="current" autocomplete="current-password" required autofocus>
+  <label for="password">New password <span class="hint">(at least 8 characters)</span></label>
+  <input type="password" id="password" name="password" autocomplete="new-password" minlength="8" required>
+  <label for="confirm">New password again</label>
+  <input type="password" id="confirm" name="confirm" autocomplete="new-password" minlength="8" required>
+  <button class="btn primary wide" type="submit">Change password</button>
+</form>
+<p class="hint">Signing in on other computers ends when the password changes.</p>
+{% endblock %}

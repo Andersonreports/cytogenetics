@@ -9,6 +9,10 @@ It is a small web app: one form in the browser, served from this computer
 (or from one office PC to the LAN with `--lan`). The packaged `.exe` runs the same
 thing for people off the office network.
 
+**Web version**: the same app on a Linux server (Docker + nginx/HTTPS), opened by its
+web address with nothing installed on the users' computers: see [DEPLOY.md](DEPLOY.md).
+The desktop version below keeps working alongside it.
+
 ## Run
 
 ```bat
@@ -19,6 +23,28 @@ run.bat --lan        :: also reachable from other computers on the network
 
 PDF export and the preview need **Microsoft Word** (used through COM, a hidden
 private instance) or **LibreOffice**.
+
+## Sign-in
+
+Everyone signs in with their own user name and password, also on the computer that
+runs the tool. A sign-in lasts 5 hours; after that (or after a password change) the
+page asks again, and the unfinished report is kept.
+
+- **First start**: the page asks for the admin account.
+- **Admins** (name menu at the top right > *Users*): add users, reset a password, make
+  someone an admin, remove a user. Give new users their password; they change it under
+  *Change password*.
+- **Every admin locked out**: on the computer running the tool,
+  `python -m backend.main --reset-password NAME` (exe: `CMCCytogeneticsReport.exe
+  --reset-password NAME`) sets a new password, or adds NAME as an admin.
+- Accounts are kept in `instance/users.json` (from source) or `cyto_data\users.json` next
+  to the exe; `CYTO_DATA_DIR` sets another folder. Passwords are stored only as salted
+  hashes. The folder also holds `secret_key`, which signs the sign-in cookie: keep it
+  private, and back the folder up with the accounts. Never commit it (git-ignored).
+- The unfinished report saved in the browser is kept per user, so the next person on
+  a shared computer does not see it.
+- Five wrong passwords for one name within 10 minutes block that name from that
+  computer for 10 minutes.
 
 ## Using it
 
@@ -100,8 +126,11 @@ The form is in three steps (tabs at the top, as in the CMC report automation too
    (see table below) in this sample. Pathogenic mutations in this gene cause ... However,
    this variant is being reported to facilitate appropriate management ...". They follow the variants until you edit them; edited text is kept, and
    *Rebuild from variants* brings the built text back (so does emptying the box).
-   Then Conclusion (bold), Recommendations (blank = section left out) and Signed by
+   Then Conclusion, Recommendations (blank = section left out) and Signed by
    (printed right-aligned as in the lab's reports; blank = "Dr. ………" dotted line to sign by hand).
+   Every box except Signed by has the **B** / *I* buttons (or Ctrl+B / Ctrl+I) for bold /
+   italic text, printed as shown (the lab's Conclusion is usually all bold: select it and
+   press **B**).
 5. **Export DOCX / Export PDF** - saved to the browser's Downloads folder as
    `<Name>_WES_&_Mito_Report_<dd_mm_yyyy>`.
 
@@ -128,6 +157,9 @@ tests/
 | `frontend/js/app.js` | its behaviour: variants list / editor, preview, export, drafts |
 | `backend/main.py` | entry point (`python -m backend.main`): starts the server, opens the browser |
 | `backend/server.py` | Flask routes: page, init, variants upload, preview, export; serves `frontend/` |
+| `backend/auth.py` | sign-in: accounts, sessions, the sign-in / first-start / password / Users pages |
+| `backend/wsgi.py`, `Dockerfile`, `docker-compose.yml`, `deploy/nginx.conf`, `requirements-web.txt` | the web version (see [DEPLOY.md](DEPLOY.md)) |
+| `frontend/auth/` | those pages' templates (`frontend/css/auth.css` their styles) |
 | `backend/core/renderer.py` | fills the Word template from a `ReportData` |
 | `backend/core/narrative.py` | the built text of a variant's Description box |
 | `backend/core/models.py` | `ReportData`, `PatientInfo` |
@@ -138,7 +170,8 @@ tests/
 | `database/omim_*.txt` | OMIM gene / phenotype tables. Licensed, so not in git: see `database/README.md`. Without them the OMIM numbers / diseases are not suggested. |
 | `assets/cmc_cytogenetics.docx` | the report template |
 | `samples/` | VarSeq Excel files and finished reports used for testing. Patient data: git-ignored, never commit. |
-| `tests/test_render.py` | smoke tests (`python -m unittest`) |
+| `tests/test_render.py` | smoke tests (`python -m unittest discover -s tests`) |
+| `tests/test_auth.py` | sign-in tests (accounts in a temp folder, see `tests/helpers.py`) |
 
 ## Editing the template
 

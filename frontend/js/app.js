@@ -1,10 +1,30 @@
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
-const STATE_KEY = 'cyto_form_state';
+// The unfinished report is kept in this browser per signed-in user, so on a shared
+// computer one person's form is not shown to the next.
+const STATE_KEY = 'cyto_form_state:' + (document.body.dataset.user || '');
+
+// Signed out (the 5-hour sign-in ended, or the password was changed): to the sign-in
+// page. The form is already saved in the browser and comes back after signing in.
+const _fetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const r = await _fetch(...args);
+  if (r.status === 401) {
+    saveState();
+    location.href = '/login?expired=1&next=/';
+    throw new Error('Signed out');
+  }
+  return r;
+};
 const G = { variants: [], current: -1, init: null, previewSeq: 0, timer: null, edited: new Set(), defaults: {} };
 // Boxes filled with the text built from the ticked variants (the server's /api/defaults)
 // until the user edits them; emptying a box hands it back to the generated text.
 const AUTO_FIELDS = ['summary', 'secondary_summary', 'incidental_summary', 'mito'];
+
+document.addEventListener('click', e => {          // the user menu closes on a click elsewhere
+  const m = document.querySelector('.user-menu');
+  if (m && m.open && !m.contains(e.target)) m.open = false;
+});
 
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -25,6 +45,7 @@ function applyData(d) {
   const p = d.patient || {};
   $$('[data-p]').forEach(el => el.value = p[el.dataset.p] || '');
   $$('[data-f]').forEach(el => el.value = d[el.dataset.f] || '');
+  syncRichFields();
   // Which generated boxes the user has changed (kept as typed). A draft saved before
   // this existed: a box with text in it counts as the user's.
   G.edited = new Set(Array.isArray(d.edited) ? d.edited : AUTO_FIELDS.filter(f => (d[f] || '').trim()));
@@ -39,7 +60,15 @@ function saveState() {
   try { localStorage.setItem(STATE_KEY, JSON.stringify(collectData())); } catch (e) {}
 }
 function loadState() {
-  try { const raw = localStorage.getItem(STATE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  try {
+    let raw = localStorage.getItem(STATE_KEY);
+    const old = localStorage.getItem('cyto_form_state');     // saved before sign-in existed
+    if (old !== null) {
+      if (!raw) { raw = old; localStorage.setItem(STATE_KEY, old); }
+      localStorage.removeItem('cyto_form_state');
+    }
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
 }
 
 // ---------------- variants ----------------
@@ -302,8 +331,9 @@ async function refreshDefaults() {
   G.defaults = j;
   AUTO_FIELDS.forEach(f => {
     const el = $(`f-${f}`);
-    if (!G.edited.has(f) && document.activeElement !== el) el.value = G.defaults[f] || '';
+    if (!G.edited.has(f) && document.activeElement !== el._rich) el.value = G.defaults[f] || '';
   });
+  syncRichFields();
   // Each variant's Description box (built text until the user edits it).
   (j.variants || []).forEach((texts, i) => {
     const v = sent[i];
@@ -387,9 +417,39 @@ function richToText(root) {
 }
 
 function textToRich(text) {
-  return (text || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  return (text || '').split(/\n\s*\n/).map(p => p.trim().replace(/\s*\n\s*/g, ' ')).filter(Boolean)
     .map(p => '<div>' + esc(p).replace(/\*\*([\s\S]+?)\*\*/g, '<b>$1</b>')
       .replace(/&lt;i&gt;/g, '<i>').replace(/&lt;\/i&gt;/g, '</i>') + '</div>').join('');
+}
+
+// ---- the Result-text boxes: the same B / I editor over each textarea, which stays (hidden)
+// as the field's value in that text form, so saving, drafts and the generated-text
+// logic work on it as before.
+function setupRichFields() {
+  $$('#tab-result textarea[data-f]').filter(ta => ta.id !== 'f-signatory').forEach(ta => {
+    const wrap = document.createElement('div');
+    wrap.className = 'rich-wrap';
+    wrap.innerHTML = '<div class="rich-bar">'
+      + '<button class="rich-btn" type="button" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>'
+      + '<button class="rich-btn" type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button></div>'
+      + '<div class="rich rich-field" contenteditable="true" spellcheck="true"></div>';
+    const box = wrap.querySelector('.rich');
+    box.dataset.placeholder = ta.placeholder || '';
+    box.style.minHeight = ta.style.minHeight || '70px';
+    ta.style.display = 'none';
+    ta.after(wrap);
+    ta._rich = box;
+    box.addEventListener('input', () => {
+      ta.value = richToText(box);
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+}
+
+function syncRichFields() {
+  $$('textarea[data-f]').forEach(ta => {
+    if (ta._rich && document.activeElement !== ta._rich) ta._rich.innerHTML = textToRich(ta.value);
+  });
 }
 
 function showVAutoState() {
@@ -481,6 +541,7 @@ async function loadDraft(file) {
 // ---------------- wiring ----------------
 async function start() {
   try { G.init = await (await fetch('/api/init')).json(); } catch (e) { G.init = { today: '', samples: [], classes: [] }; }
+  setupRichFields();
   applyData(loadState() || {});
   await refreshDefaults();
   $$('[data-rebuild]').forEach(b => b.addEventListener('click', e => {
@@ -488,6 +549,7 @@ async function start() {
     const f = b.dataset.rebuild;
     G.edited.delete(f);
     $(`f-${f}`).value = G.defaults[f] || '';
+    syncRichFields();
     showAutoState(); changed();
   }));
   updateSteps();
@@ -541,18 +603,23 @@ async function start() {
     v.edited = v.auto && v.description === (v.auto.description || '') ? [] : ['description'];
     showVAutoState();
   });
-  $('rich').addEventListener('paste', e => {        // pasted text keeps its paragraphs, not its styles
+  $$('.rich').forEach(box => box.addEventListener('paste', e => {   // pasted text keeps its paragraphs, not its styles
     e.preventDefault();
     const t = (e.clipboardData || window.clipboardData).getData('text/plain');
     document.execCommand('insertText', false, t);
-  });
+  }));
   $$('.rich-btn[data-cmd]').forEach(b => {
     b.addEventListener('mousedown', e => e.preventDefault());   // keep the selection
-    b.addEventListener('click', () => { $('rich').focus(); document.execCommand(b.dataset.cmd); });
+    b.addEventListener('click', () => {
+      b.closest('.rich-wrap').querySelector('.rich').focus();
+      document.execCommand(b.dataset.cmd);
+    });
   });
   document.addEventListener('selectionchange', () => {
-    if (document.activeElement !== $('rich')) return;
-    $$('.rich-btn[data-cmd]').forEach(b => b.classList.toggle('on', document.queryCommandState(b.dataset.cmd)));
+    const box = document.activeElement;
+    if (!box || !box.classList.contains('rich')) return;
+    box.closest('.rich-wrap').querySelectorAll('.rich-btn[data-cmd]')
+      .forEach(b => b.classList.toggle('on', document.queryCommandState(b.dataset.cmd)));
   });
 
   $$('[data-vrebuild]').forEach(b => b.addEventListener('click', e => {
