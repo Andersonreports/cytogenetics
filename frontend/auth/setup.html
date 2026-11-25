@@ -1,17 +1,17 @@
-{% extends "auth/base.html" %}
+{% extends "auth/split.html" %}
+{% import "auth/fields.html" as f %}
 {% block title %}First start{% endblock %}
 {% block content %}
 <h2>Create the admin account</h2>
-<p class="hint">First start: this account can add the other users and reset their passwords.</p>
+<p class="lead">First start: this account can add the other users and reset their passwords.</p>
+{{ f.messages(error) }}
 <form method="post" action="{{ url_for('auth.setup') }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <label for="username">User name</label>
-  <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none"
+  <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false"
          required autofocus value="{{ request.form.get('username', '') }}">
-  <label for="password">Password <span class="hint">(at least 8 characters)</span></label>
-  <input type="password" id="password" name="password" autocomplete="new-password" minlength="8" required>
-  <label for="confirm">Password again</label>
-  <input type="password" id="confirm" name="confirm" autocomplete="new-password" minlength="8" required>
-  <button class="btn primary wide" type="submit">Create and sign in</button>
+  {{ f.password("password", "password", "Password", "new-password", minlength=8, hint="(at least 8 characters)") }}
+  {{ f.password("confirm", "confirm", "Password again", "new-password", minlength=8) }}
+  <button class="submit" type="submit">Create and sign in</button>
 </form>
 {% endblock %}

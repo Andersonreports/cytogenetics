@@ -1,15 +1,19 @@
-{% extends "auth/base.html" %}
+{% extends "auth/split.html" %}
+{% import "auth/fields.html" as f %}
 {% block content %}
-<h2>Sign in</h2>
+<h2>Welcome back</h2>
+<p class="lead">Sign in to continue to your reports.</p>
 {% if expired and not error %}<p class="auth-msg">Your sign-in ended. Sign in again; the report you were filling is kept.</p>{% endif %}
+{{ f.messages(error) }}
 <form method="post" action="{{ url_for('auth.login') }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <input type="hidden" name="next" value="{{ next }}">
   <label for="username">User name</label>
-  <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" required autofocus>
-  <label for="password">Password</label>
-  <input type="password" id="password" name="password" autocomplete="current-password" required>
-  <button class="btn primary wide" type="submit">Sign in</button>
+  <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+  {{ f.password("password", "password", "Password", "current-password") }}
+  <button class="submit" type="submit">Sign in
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
 </form>
-<p class="hint">Forgot your password? Ask an admin to reset it.</p>
+<p class="help">Forgot your password? Ask an admin to reset it.</p>
 {% endblock %}

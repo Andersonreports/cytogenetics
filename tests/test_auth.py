@@ -150,11 +150,37 @@ class AuthTests(unittest.TestCase):
         with self.assertRaises(auth.AuthError):
             auth.set_admin(TEST_USER, False)
 
-    def test_change_own_password(self):
-        auth.create_user("self1", "old-pass-111") if "self1" not in auth.load_users() else None
+    def test_new_tab_must_sign_in(self):
+        """Only the page right after signing in is 'fresh' (that tab is let in by
+        js/tab.js); the cookie ends with the browser."""
+        c = app.test_client()
+        token = _csrf(c)
+        r = c.post("/login", data={"username": TEST_USER, "password": TEST_PASSWORD, "csrf": token})
+        self.assertNotIn("Expires=", r.headers.get("Set-Cookie", ""))     # browser-session cookie
+        self.assertIn(b'data-fresh="1"', c.get("/").data)
+        self.assertIn(b'data-fresh="0"', c.get("/").data)                  # a later / new-tab load
+        self.assertIn(b"js/tab.js", c.get("/").data)
+
+    def test_only_admins_set_passwords(self):
+        """A user cannot change their own password (no menu item, page refused)."""
+        auth.create_user("plain1", "plain-pass-1") if "plain1" not in auth.load_users() else None
+        c = app.test_client()
+        token = _csrf(c)
+        c.post("/login", data={"username": "plain1", "password": "plain-pass-1", "csrf": token})
+        self.assertNotIn(b"Change password", c.get("/").data)
+        self.assertEqual(c.get("/account").status_code, 403)
+        r = c.post("/account", data={"csrf": token, "current": "plain-pass-1",
+                                     "password": "new-pass-222", "confirm": "new-pass-222"})
+        self.assertEqual(r.status_code, 403)
+        self.assertTrue(auth.verify("plain1", "plain-pass-1"))      # unchanged
+        auth.delete_user("plain1")
+
+    def test_admin_changes_own_password(self):
+        auth.create_user("self1", "old-pass-111", admin=True) if "self1" not in auth.load_users() else None
         c = app.test_client()
         token = _csrf(c)
         c.post("/login", data={"username": "self1", "password": "old-pass-111", "csrf": token})
+        self.assertIn(b"Change password", c.get("/").data)
         token = _csrf(c, "/account")
         r = c.post("/account", data={"csrf": token, "current": "wrong", "password": "new-pass-222",
                                      "confirm": "new-pass-222"})

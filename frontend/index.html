@@ -1,31 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-user="{{ user }}" data-fresh="{{ '1' if g.fresh else '0' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CMC Cytogenetics Report</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<script src="{{ asset('js/tab.js') }}"></script>
+<link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
 <body data-user="{{ user }}">
 <header>
   <h1>CMC Cytogenetics Report</h1>
-  <span class="sub">NGS-WES (Whole Exome &amp; Mitochondrial) · Department of Cytogenetics, CMC Vellore</span>
-  <details class="user-menu">
-    <summary class="btn ghost" title="Signed in as {{ user }}">{{ user }} &#9662;</summary>
-    <div class="user-menu-list">
-      {% if is_admin %}<a href="{{ url_for('auth.admin') }}">Users</a>{% endif %}
-      <a href="{{ url_for('auth.account') }}">Change password</a>
-      <form method="post" action="{{ url_for('auth.logout') }}">
+  <details class="hmenu">
+    <summary class="btn ghost" title="Save, load or clear the report">Draft <span class="caret" aria-hidden="true">&#9662;</span></summary>
+    <div class="hmenu-list">
+      <button type="button" id="save-draft">Save draft</button>
+      <label class="hmenu-item">Load draft<input type="file" id="load-draft" accept=".json" hidden></label>
+      <button type="button" class="danger" id="clear-btn" title="Clear all form data and start a new report">Clear</button>
+    </div>
+  </details>
+  <details class="hmenu">
+    <summary class="btn export-btn" title="Download the report">Export <span class="caret" aria-hidden="true">&#9662;</span></summary>
+    <div class="hmenu-list">
+      <button type="button" id="export-pdf">Export PDF</button>
+      <button type="button" id="export-docx">Export DOCX</button>
+    </div>
+  </details>
+  <details class="hmenu">
+    <summary class="avatar" title="Signed in as {{ user }}" aria-label="Account: {{ user }}">{{ (user or '?')[:1] | upper }}</summary>
+    <div class="hmenu-list">
+      <div class="hmenu-who">Signed in as<br><b>{{ user }}</b></div>
+      {% if is_admin %}
+        <a href="{{ url_for('auth.admin') }}">Users</a>
+        <a href="{{ url_for('auth.account') }}">Change password</a>
+      {% endif %}
+      <form method="post" action="{{ url_for('auth.logout') }}" data-logout>
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <button type="submit">Log out</button>
       </form>
     </div>
   </details>
-  <button class="btn ghost clear" id="clear-btn" title="Clear all form data and start a new report">Clear</button>
-  <button class="btn ghost" id="save-draft">Save draft</button>
-  <label class="btn ghost" style="margin:0;color:#fff">Load draft<input type="file" id="load-draft" accept=".json" hidden></label>
-  <button class="btn" id="export-docx">Export DOCX</button>
-  <button class="btn primary" id="export-pdf" style="border-color:#fff">Export PDF</button>
 </header>
 
 <main>
@@ -188,6 +201,6 @@
 </main>
 <div id="toast"></div>
 
-<script src="/static/js/app.js"></script>
+<script src="{{ asset('js/app.js') }}"></script>
 </body>
 </html>

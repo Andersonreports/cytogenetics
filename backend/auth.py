@@ -2,7 +2,8 @@
 
 Every page and API call needs a signed-in user (the computer running the tool too).
 The first start asks for the admin account (/setup); admins add / remove users and reset
-passwords on /admin; everyone can change their own password on /account. A sign-in lasts
+passwords on /admin, and change their own on /account. Only admins set passwords: other
+users cannot change theirs (an admin resets it for them). A sign-in lasts
 SESSION_HOURS from login.
 
 Passwords are stored only as salted hashes (werkzeug). The data folder (users.json and the
@@ -181,7 +182,11 @@ def current_user() -> str | None:
 
 def _sign_in(name: str) -> None:
     session.clear()
-    session.permanent = True
+    # A browser-session cookie (gone when the browser closes); SESSION_HOURS still
+    # limits it on the server. `fresh` marks the first page after signing in: only that
+    # tab is let in (js: tab check), so opening the link in a new tab asks again.
+    session.permanent = False
+    session["fresh"] = True
     session["user"] = name
     session["stamp"] = _stamp(load_users()[name])
     session["since"] = time.time()
@@ -260,6 +265,10 @@ def init_app(app) -> None:
     @app.before_request
     def _require_sign_in():
         g.user = current_user()
+        g.fresh = False
+        if g.user and request.method == "GET" and request.endpoint not in OPEN_ENDPOINTS \
+                and not request.path.startswith("/api/"):
+            g.fresh = session.pop("fresh", False)   # this page is the one signed in from
         if request.endpoint in OPEN_ENDPOINTS or g.user:
             return None
         if not load_users():
@@ -347,7 +356,9 @@ def logout():
 
 
 @bp.route("/account", methods=["GET", "POST"])
+@admin_required
 def account():
+    """An admin's own password. Other users cannot change theirs: an admin resets it."""
     error = None
     if request.method == "POST":
         _check_csrf()
@@ -376,7 +387,7 @@ def admin():
         try:
             if action == "add":
                 name = create_user(name, f.get("password", ""), admin=bool(f.get("admin")))
-                flash(f"User '{name}' added. Give them the password; they can change it under 'Password'.")
+                flash(f"User '{name}' added. Give them the password; only an admin can change it.")
             elif action == "reset":
                 set_password(name, f.get("password", ""))
                 if name == g.user:

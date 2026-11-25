@@ -1,6 +1,7 @@
 /* Sign-in, first-start, password and user pages (frontend/auth/) */
-.auth-main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:48px 16px;overflow-y:auto}
-.auth-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:26px 28px;width:100%;max-width:380px;box-shadow:0 4px 18px rgba(20,40,60,.07)}
+/* margin:auto centres the card both ways, and a page taller than the window (Users) still scrolls from its top */
+.auth-main{flex:1;display:flex;padding:32px 16px;overflow-y:auto}
+.auth-card{margin:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:26px 28px;width:100%;max-width:380px;box-shadow:0 4px 18px rgba(20,40,60,.07)}
 .auth-card.wide{max-width:860px}
 .auth-card h2{margin:0 0 14px;font-size:20px}
 .auth-card h3{margin:26px 0 10px;font-size:15px}
@@ -25,3 +26,46 @@ table.users input[type=password]{width:150px;padding:5px 8px}
 .add-user label.check{display:flex;align-items:center;gap:6px;margin:0 0 9px}
 .add-user .btn{margin-bottom:1px}
 @media (max-width:640px){table.users thead{display:none}table.users td{display:block;border:none;padding:4px 0}table.users tr{display:block;border-bottom:1px solid var(--line);padding:8px 0}}
+
+/* Sign-in, first-start and not-set-up pages (auth/split.html): brand panel + form */
+.split{flex:1;display:flex;flex-wrap:wrap;min-height:100vh;background:#fff}
+.split-brand{flex:1.2 1 560px;min-width:0;box-sizing:border-box;background:#16233f;color:#fff;padding:48px 64px;display:flex;flex-direction:column;gap:40px}
+.split-logo{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:700;letter-spacing:.2px}
+.split-logo .mark{width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.split-pitch{flex:1;display:flex;flex-direction:column;justify-content:center;gap:36px}
+.split-pitch h1{margin:0 0 14px;max-width:520px;font-size:42px;line-height:1.12;font-weight:700;letter-spacing:-.6px}
+.split-pitch p{margin:0;max-width:520px;font-size:16px;line-height:1.55;color:#c9d3e6}
+.karyogram{width:400px;max-width:100%;height:auto}
+.split-form{flex:1 1 460px;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;padding:48px 24px}
+.split-form-inner{flex:1;display:flex;align-items:center;justify-content:center}
+.split-form .auth-form{width:100%;max-width:360px}
+.split-note{margin:24px 0 0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:#5b6b78}
+@media (max-width:700px){
+  .split-brand{padding:24px;gap:20px}
+  .split-pitch h1{font-size:26px;margin-bottom:8px}
+  .split-pitch p{font-size:14.5px}
+  .karyogram{display:none}
+  .split-form{padding:32px 20px}
+}
+
+/* The form on those pages (and Change password) */
+.auth-form{display:flex;flex-direction:column}
+.auth-form form{display:flex;flex-direction:column}
+.auth-form h2{margin:0;font-size:30px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
+.auth-card .auth-form h2,.auth-card>h2{font-size:22px}
+.auth-form .lead{margin:8px 0 28px;font-size:15px;line-height:1.5;color:#5b6b78}
+.auth-form label{display:block;font-size:13px;font-weight:600;color:var(--label);margin:0 0 6px}
+.auth-form input[type=text],.auth-form input[type=password]{display:block;width:100%;height:48px;box-sizing:border-box;padding:0 14px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:15px;color:var(--ink);background:#fff;margin:0 0 20px}
+.auth-form input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,138,.15)}
+.auth-form .pw-wrap{position:relative;margin:0 0 20px}
+.auth-form .pw-wrap input[type=password],.auth-form .pw-wrap input[type=text]{margin:0;padding-right:50px}
+.pw-toggle{position:absolute;right:2px;top:2px;width:44px;height:44px;border:none;background:none;color:#5b6b78;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px}
+.pw-toggle:hover{color:var(--ink)}
+.pw-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.pw-toggle .eye-off,.pw-toggle.on .eye-open{display:none}
+.pw-toggle.on .eye-off{display:block}
+.auth-form .submit{margin-top:8px;height:50px;border:none;border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-size:15.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.auth-form .submit:hover{background:var(--accent-2)}
+.auth-form .submit:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.auth-form .help{margin:18px 0 0;font-size:13px;color:#5b6b78;text-align:center}
+.auth-form .auth-msg{margin-bottom:18px}

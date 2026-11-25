@@ -32,8 +32,9 @@ page asks again, and the unfinished report is kept.
 
 - **First start**: the page asks for the admin account.
 - **Admins** (name menu at the top right > *Users*): add users, reset a password, make
-  someone an admin, remove a user. Give new users their password; they change it under
-  *Change password*.
+  someone an admin, remove a user. Only admins set passwords: give new users their
+  password; users cannot change it themselves (an admin resets it). Admins change their
+  own under *Change password*.
 - **Every admin locked out**: on the computer running the tool,
   `python -m backend.main --reset-password NAME` (exe: `CMCCytogeneticsReport.exe
   --reset-password NAME`) sets a new password, or adds NAME as an admin.

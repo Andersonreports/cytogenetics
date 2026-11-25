@@ -23,6 +23,17 @@ app = Flask(__name__, template_folder=resource_path("frontend"),
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024     # Excel uploads / report data
 auth.init_app(app)      # every page and API call needs a signed-in user (backend/auth.py)
 
+
+@app.template_global()
+def asset(path: str) -> str:
+    """/static/<path>?v=<file's change time>: a changed css / js file gets a new address,
+    so browsers fetch it instead of using the copy they kept from before an update."""
+    try:
+        v = int(os.path.getmtime(os.path.join(app.static_folder, path)))
+    except OSError:
+        v = 0
+    return f"/static/{path}?v={v}"
+
 CLASSES = ["Pathogenic", "Likely Pathogenic", "Variant of Uncertain Significance",
            "Pathogenic (carrier state)", "Drug response", "Likely Benign", "Benign"]
 

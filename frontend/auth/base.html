@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-user="{{ g.user or '' }}" data-fresh="{{ '1' if g.fresh else '0' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Sign in{% endblock %} · CMC Cytogenetics Report</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<script src="{{ asset('js/tab.js') }}"></script>
+<link rel="stylesheet" href="{{ asset('css/style.css') }}">
+<link rel="stylesheet" href="{{ asset('css/auth.css') }}">
 </head>
 <body class="auth-page">
 <header>
   <h1>CMC Cytogenetics Report</h1>
-  <span class="sub">NGS-WES (Whole Exome &amp; Mitochondrial) · Department of Cytogenetics, CMC Vellore</span>
   {% if g.user %}
     <span class="who">{{ g.user }}</span>
     <a class="btn ghost" href="{{ url_for('index') }}">Back to the report</a>
-    <form method="post" action="{{ url_for('auth.logout') }}" class="inline-form">
+    <form method="post" action="{{ url_for('auth.logout') }}" class="inline-form" data-logout>
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <button class="btn ghost" type="submit">Log out</button>
     </form>
@@ -29,5 +29,6 @@
     {% block content %}{% endblock %}
   </div>
 </main>
+<script src="{{ asset('js/auth.js') }}"></script>
 </body>
 </html>

@@ -21,10 +21,17 @@ const G = { variants: [], current: -1, init: null, previewSeq: 0, timer: null, e
 // until the user edits them; emptying a box hands it back to the generated text.
 const AUTO_FIELDS = ['summary', 'secondary_summary', 'incidental_summary', 'mito'];
 
-document.addEventListener('click', e => {          // the user menu closes on a click elsewhere
-  const m = document.querySelector('.user-menu');
-  if (m && m.open && !m.contains(e.target)) m.open = false;
+// Top bar menus (Draft / Export / account): one open at a time; a click elsewhere or on
+// one of its items closes it (Load draft closes once the file dialog has opened).
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.hmenu[open]').forEach(m => {
+    const inList = e.target.closest('.hmenu-list');
+    if (!m.contains(e.target) || (inList && m.contains(inList) && !e.target.matches('input'))) m.open = false;
+  });
 });
+document.querySelectorAll('details.hmenu').forEach(m => m.addEventListener('toggle', () => {
+  if (m.open) document.querySelectorAll('details.hmenu[open]').forEach(o => { if (o !== m) o.open = false; });
+}));
 
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -687,4 +694,4 @@ async function start() {
   });
   preview();
 }
-start();
+if (window.CYTO_TAB_OK !== false) start();     // js/tab.js: a tab not signed in is signing out
