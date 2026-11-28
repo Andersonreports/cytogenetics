@@ -134,6 +134,15 @@
         <div data-for="mito"><label>DNA source</label><input type="text" data-v="dna_source" placeholder="Blood"></div>
         <div><label data-l-mito="Allele state">Zygosity</label><select data-v="zygosity" id="zyg-select"></select></div>
       </div>
+      <div class="ext-links" id="ext-links" data-for="snv">
+        <span class="hint">Check this variant on:</span>
+        <a class="btn small ext disabled" id="lnk-franklin" target="_blank" rel="noopener noreferrer"
+           data-on="Open this variant in Franklin (GRCh38)"
+           data-off="Add a substitution genomic position (GRCh38) to open it in Franklin">Franklin &#8599;</a>
+        <a class="btn small ext disabled" id="lnk-genebe" target="_blank" rel="noopener noreferrer"
+           data-on="Open this variant in GeneBe (hg38)"
+           data-off="Add the genomic position (GRCh38) to open it in GeneBe">GeneBe &#8599;</a>
+      </div>
       <div class="detail-title">Classification &amp; disease</div>
       <div class="grid">
         <div><label data-l-cnv="ACMG / ClinGen classification">ACMG classification</label><select data-v="classification" id="class-select"></select></div>
@@ -142,14 +151,13 @@
         <div><label data-l-cnv="ClinGen CNV criteria">ACMG attributes (criteria)</label><input type="text" data-v="criteria" placeholder="PVS1, PM2, PP4" data-ph-cnv="1A, 2A, 3A, 4B"></div>
         <div data-for="cnv" class="full"><label>Genes in the involved segment <span class="hint">(optional: adds the “Table showing all genes in the involved segment” above the signature)</span></label><textarea data-v="segment_genes" style="min-height:52px" placeholder="SCN2A, SCN3A, COBLL1, GRB14 …"></textarea></div>
       </div>
-      <div class="detail-title">Description</div>
+      <div class="detail-title">Description
+        <label class="auto-toggle" title="Tick: build the Description from this variant's values and keep it following them. Untick: remove it."><input type="checkbox" id="automate-description"> Automate description</label></div>
       <div class="rich-wrap">
         <div class="rich-bar">
           <button class="rich-btn" type="button" id="rich-bold" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
           <button class="rich-btn" type="button" id="rich-italic" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
           <span class="hint">Printed as typed here, from the bold “Variant …” line on. Enter = new paragraph.</span>
-          <span style="flex:1"></span>
-          <button class="linkbtn vrebuild" type="button" data-vrebuild="description" title="Replace with the text built from the variant's values">&#8635; Rebuild</button>
         </div>
         <div class="rich" id="rich" contenteditable="true" spellcheck="true"
              data-placeholder="The gene's function and its disease, the variant observed, its frequency and literature / ClinVar reports, then the classification sentence …"></div>
@@ -168,7 +176,8 @@
   <div class="card">
     <h2>Result text</h2>
     <div class="grid">
-      <div class="full" data-box="summary"><label for="f-summary">Summary <button class="linkbtn rebuild" type="button" data-rebuild="summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
+      <div class="full" data-box="summary"><div class="field-head"><label for="f-summary">Summary</label>
+          <label class="auto-toggle" title="Tick: build the Summary from the ticked variants and keep it following them. Untick: remove it."><input type="checkbox" id="automate-summary"> Automate summary</label></div>
         <textarea id="f-summary" data-f="summary" style="min-height:150px"></textarea>
         <p class="hint auto-hint" data-auto-hint="summary"></p></div>
       <div class="full" data-box="secondary_summary"><label for="f-secondary_summary">Secondary finding — Summary <button class="linkbtn rebuild" type="button" data-rebuild="secondary_summary" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
@@ -182,10 +191,12 @@
       <div class="full" data-box="mito"><label for="f-mito">Mitochondrial genome analysis <button class="linkbtn rebuild" type="button" data-rebuild="mito" title="Replace your text with the one built from the ticked variants">&#8635; Rebuild from variants</button></label>
         <textarea id="f-mito" data-f="mito" style="min-height:52px"></textarea>
         <p class="hint auto-hint" data-auto-hint="mito"></p></div>
-      <div class="full"><label for="f-recommendations">Recommendations</label>
-        <textarea id="f-recommendations" data-f="recommendations" placeholder="Blank = no Recommendations section"></textarea></div>
+      <div class="full"><div class="field-head"><label for="f-recommendations">Recommendations</label>
+          <label class="auto-toggle" title="Tick: add the standard and finding-type lines built from the ticked variants and keep them following the variants. Untick: remove them."><input type="checkbox" id="automate-recs"> Automate recommendations</label></div>
+        <textarea id="f-recommendations" data-f="recommendations" placeholder="Blank = no Recommendations section"></textarea>
+        <p class="hint" data-auto-hint="recommendations"></p></div>
       <div class="full"><label for="f-signatory">Signed by</label>
-        <textarea id="f-signatory" data-f="signatory" style="min-height:52px" placeholder="Name (Dr. is added)&#10;Designation   (blank = &quot;Dr. ………&quot; dotted line, signed by hand)"></textarea></div>
+        <textarea id="f-signatory" data-f="signatory" style="min-height:52px" placeholder="Name (Dr. is added)"></textarea></div>
     </div>
   </div>
   </div>

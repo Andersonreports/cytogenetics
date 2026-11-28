@@ -6,6 +6,10 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ["CYTO_DATA_DIR"] = tempfile.mkdtemp(prefix="cyto_test_data_")
+# Keep the built narrative deterministic and network-free: the NCBI gene-function
+# lookup (backend/core/geneinfo.py) is skipped, so description() falls back to its
+# short built line, which the tests assert on.
+os.environ.setdefault("CYTO_GENEINFO_OFFLINE", "1")
 
 TEST_USER, TEST_PASSWORD = "tester", "test-password-1"
 

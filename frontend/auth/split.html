@@ -3,38 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Sign in{% endblock %} · Cytogenetics Report</title>
+<title>{% block title %}Sign in{% endblock %} · Germline-Cytogenetics Report Automation</title>
 <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 <link rel="stylesheet" href="{{ asset('css/auth.css') }}">
 </head>
 <body class="auth-page">
 <div class="split">
   <section class="split-brand">
-    <div class="split-logo">
-      <span class="mark">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3c0 3 1 4 2 5-1 1-2 2-2 5s1 5 0 8"/><path d="M16 3c0 3-1 4-2 5 1 1 2 2 2 5s-1 5 0 8"/><path d="M8.5 6h3M8.6 16h3M12.5 6h3M12.4 16h3"/></svg>
-      </span>
-      Cytogenetics Report
-    </div>
+    <div class="split-dept"><span class="dot" aria-hidden="true"></span>Department of Cytogenetics · CMC Vellore</div>
     <div class="split-pitch">
-      <div>
-        <h1>Exome &amp; mitochondrial reports, ready to sign.</h1>
-        <p>Upload the variant list, choose what to report, and export a finished DOCX or PDF.</p>
-      </div>
-      {% include "auth/karyogram.svg" %}
+      <h1>Germline-Cytogenetics Report Automation</h1>
+      <p>Whole exome and mitochondrial gene sequencing reports, from VarSeq variant list to signed DOCX or PDF.</p>
     </div>
   </section>
 
   <section class="split-form">
-    <div class="split-form-inner">
-      <div class="auth-form">
-        {% block content %}{% endblock %}
-      </div>
+    <div class="auth-form">
+      {% block content %}{% endblock %}
     </div>
-    <p class="split-note">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-      Patient data. Log out when you leave a shared computer.
-    </p>
   </section>
 </div>
 <script src="{{ asset('js/auth.js') }}"></script>

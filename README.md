@@ -104,15 +104,21 @@ The form is in three steps (tabs at the top, as in the CMC report automation too
      added to the References.
    Each variant's **Description** is one text box, printed as typed: Enter starts a new
    paragraph, **B** / *I* (or Ctrl+B / Ctrl+I) make the selected text bold / italic
-   (the buttons stay in view while you scroll). It starts with text
-   built from the variant's own values (Excel / OMIM; `backend/core/narrative.py`): the
+   (the buttons stay in view while you scroll). It starts blank; ticking **Automate
+   description** (beside the heading) fills it with text built from the variant's own
+   values (Excel / OMIM / NCBI; `backend/core/narrative.py`): the
    bold "Variant NM_...:c... / NP_...:p... in GENE gene" line (a box that does not start
-   with such a line gets the built one in the report), the gene's function and its OMIM disease, the
+   with such a line gets the built one in the report), the gene's function (NCBI), its
+   OMIM disease and the disease's clinical description (NCBI MedGen), the
    variant observed (type, position, protein change), its gnomAD frequency and ClinVar
    classification, then the bold "Based on ACMG criteria, this variant is classified as
-   ..." sentence. It follows the variant until you edit it; edited text (even an emptied
-   box) is printed as it is, and *Rebuild* brings the built text back.
-4. **Result text** - the Summary, the Secondary / Incidental finding Summaries (shown
+   ..." sentence. Once automated it follows the variant's values until you type in it;
+   unticking removes the text. The box is printed as it is.
+4. **Result text** - the **Summary** starts blank and is printed as the box holds it:
+   ticking **Automate summary** fills it with the paragraph built from the ticked variants
+   (one sentence per variant when several are ticked); from then on it follows the ticked
+   variants until you type in it (then it is kept as typed and the box unticks; ticking
+   again rebuilds it). Unticking removes the text. The Secondary / Incidental finding Summaries (shown
    when such a variant is ticked) and Mitochondrial genome analysis are filled in with
    the text built from the ticked variants, as the report prints it (e.g. "... shows
    the following pathogenic variant in the DPYD gene that is associated with autosomal
@@ -127,7 +133,10 @@ The form is in three steps (tabs at the top, as in the CMC report automation too
    (see table below) in this sample. Pathogenic mutations in this gene cause ... However,
    this variant is being reported to facilitate appropriate management ...". They follow the variants until you edit them; edited text is kept, and
    *Rebuild from variants* brings the built text back (so does emptying the box).
-   Then Conclusion, Recommendations (blank = section left out) and Signed by
+   Then Conclusion, Recommendations (blank = section left out; ticking **Automate
+   recommendations** adds the standard lines and the finding-type lines for VUS, compound
+   het, mtDNA and X-linked variants, following the ticked variants until you edit them;
+   unticking removes them) and Signed by
    (printed right-aligned as in the lab's reports; blank = "Dr. ………" dotted line to sign by hand).
    Every box except Signed by has the **B** / *I* buttons (or Ctrl+B / Ctrl+I) for bold /
    italic text, printed as shown (the lab's Conclusion is usually all bold: select it and

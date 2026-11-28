@@ -312,12 +312,80 @@ def _kinds_text(chosen: list[dict], noun: str = "variant") -> str:
     return _joined(kinds)
 
 
+def _vus_only_summary(snv: list[dict]) -> str:
+    """The lab's wording when the only findings are variants of uncertain significance:
+    'No pathogenic or likely pathogenic variants ... However, a variant of uncertain
+    significance was identified in the GENE gene ...'."""
+    genes = list(dict.fromkeys(v.get("gene", "").strip() for v in snv if v.get("gene")))
+    many = len(snv) > 1 or len(genes) > 1
+    lead = "variants of uncertain significance were" if many else "a variant of uncertain significance was"
+    text = ("No pathogenic or likely pathogenic variants related to the patient's phenotype were "
+            f"evident on whole exome analysis. However, {lead} identified in the {_joined(genes)} "
+            f"gene{'s' if len(genes) > 1 else ''} in this sample (see table and description below).")
+    if len(genes) == 1:
+        diseases = list(dict.fromkeys(d.strip() for v in snv for d in v.get("disease", "").split(";")
+                                      if d.strip() and d.strip() != "-"))
+        if diseases:
+            codes = list(dict.fromkeys(c for v in snv for c in _codes(v) if c in _CODES))
+            mode = f"{_CODES[codes[0]]} " if len(codes) == 1 and len(diseases) == 1 else ""
+            text += (f" The {genes[0]} gene is associated with "
+                     f"{_no_break_linked(mode)}{_joined([_disease_text(d) for d in diseases])}.")
+    return text
+
+
+def _class_phrase(v: dict) -> str:
+    """'a pathogenic variant', 'a likely pathogenic variant', 'a variant of uncertain
+    significance'."""
+    label = vr.classification(v).strip().lower()
+    if "uncertain" in label:
+        return "a variant of uncertain significance"
+    return f"a {label} variant" if label else "a variant"
+
+
+def _assoc_clause(diseases: list[str], codes: list[str]) -> str:
+    """', associated with autosomal recessive <disease>' for a summary sentence."""
+    if not diseases:
+        return ""
+    mode = f"{_CODES[codes[0]]} " if len(codes) == 1 and len(diseases) == 1 else ""
+    if mode and any(mode.strip() in d.lower() for d in diseases):   # name already says it
+        mode = ""
+    return f", associated with {_no_break_linked(mode)}{_joined([_disease_text(d) for d in diseases])}"
+
+
+def _multi_snv_summary(snv: list[dict]) -> str:
+    """One sentence per reported variant (WES 12 / 60 / 88 style), grouping two variants
+    of the same gene as 'Two variants were identified in the GENE gene ...'. Sentences are
+    joined with 'In addition,'; the clinical interpretation is left for the user to add."""
+    groups: dict[str, list[dict]] = {}
+    for v in snv:
+        groups.setdefault(v.get("gene", "").strip(), []).append(v)
+    sentences = []
+    for i, (gene, vs) in enumerate(groups.items()):
+        diseases = list(dict.fromkeys(d.strip() for v in vs for d in v.get("disease", "").split(";")
+                                      if d.strip() and d.strip() != "-"))
+        codes = list(dict.fromkeys(c for v in vs for c in _codes(v) if c in _CODES))
+        assoc = _assoc_clause(diseases, codes)
+        if len(vs) == 1:
+            body = f"{_class_phrase(vs[0])} was identified in the {gene} gene{assoc}"
+        else:
+            n = {2: "Two", 3: "Three", 4: "Four"}.get(len(vs), str(len(vs)))
+            body = f"{n.lower()} variants were identified in the {gene} gene{assoc}"
+        sentences.append(("In addition, " + body if i else body[:1].upper() + body[1:]) + ".")
+    return (" ".join(sentences)
+            + " Further details about these variants are provided in the table and descriptions below.")
+
+
 def summary_default(chosen: list[dict]) -> str:
     """The Summary when the form leaves it blank."""
     if not chosen:
         return NO_VARIANT_SUMMARY
     snv = [v for v in chosen if kind(v) != "cnv"]
     cnv = [v for v in chosen if kind(v) == "cnv"]
+    if snv and not cnv:
+        if len(snv) > 1:                        # 2+ variants: one sentence each
+            return _multi_snv_summary(snv)
+        if "uncertain" in vr.classification(snv[0]).strip().lower():
+            return _vus_only_summary(snv)
     out = []
     if snv:
         genes = list(dict.fromkeys(v.get("gene", "").strip() for v in snv if v.get("gene")))
@@ -1142,6 +1210,41 @@ def _fill_signatory(doc, value: str) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def recommendations_default(chosen: list[dict]) -> str:
+    """Suggested Recommendations from the ticked variants: the standard lines plus the
+    finding-type lines the lab's reports use (VUS -> segregation/re-categorization,
+    compound het -> phasing, mtDNA -> maternal testing, X-linked -> maternal screening).
+    The disease-specific management advice is left for the user to add. The form does NOT
+    auto-fill this; a button inserts it on request."""
+    if not chosen:
+        return ""
+    lines = ["Clinical correlation is advised."]
+    by_gene: dict[str, list[dict]] = {}
+    for v in chosen:
+        by_gene.setdefault(v.get("gene", "").strip(), []).append(v)
+    for gene, vs in by_gene.items():
+        if not gene:
+            continue
+        codes = {c for v in vs for c in _codes(v) if c in _CODES}
+        snv = [v for v in vs if kind(v) not in ("cnv", "mito")]
+        if len(snv) >= 2:
+            lines.append(f"Determination of phasing through parental testing is advised to confirm "
+                         f"whether the {gene} variants are on different alleles (in trans).")
+        for v in vs:
+            if kind(v) == "mito":
+                ident = v.get("variant", "").strip() or "variant"
+                lines.append(f"Maternal testing for the {ident} variant is recommended to assess its "
+                             f"presence and heteroplasmy level.")
+        if any("uncertain" in vr.classification(v).strip().lower() for v in snv):
+            lines.append(f"Segregation analysis / parental testing for the {gene} variant may help to "
+                         f"clarify its clinical significance and assist in re-categorization.")
+        elif codes & {"XL", "XLR", "XLD"} and snv:
+            lines.append(f"Maternal carrier screening for the {gene} variant is recommended to "
+                         f"determine the recurrence risk.")
+    lines.append("Genetic counselling is advised.")
+    return "\n\n".join(dict.fromkeys(lines))    # de-duplicate, keep order (one per paragraph)
+
+
 def default_texts(data: ReportData) -> dict:
     """The texts the report prints when the form leaves a box blank, from the ticked
     variants: the form shows them in its boxes, ready to edit."""
@@ -1149,7 +1252,8 @@ def default_texts(data: ReportData) -> dict:
     mito = [v for v in ticked if kind(v) == "mito"]
     nuclear = [v for v in ticked if kind(v) != "mito"]
     out = {"summary": summary_default([v for v in nuclear if _finding(v) == "primary"]),
-           "mito": mito_summary_default(mito) if mito else MITO_DEFAULT}
+           "mito": mito_summary_default(mito) if mito else MITO_DEFAULT,
+           "recommendations": recommendations_default(ticked)}
     for key, word in EXTRA_BLOCKS:
         out[f"{word}_summary"] = block_summary_default([v for v in nuclear if _finding(v) == key], key)
     # Per variant (same order): Description, Variant evidence, Classification statement.
@@ -1177,7 +1281,8 @@ def render_report(data: ReportData):
     blk = _Block(doc)                   # before the primary parts are filled
     _fill_labels(doc, data)
     _fill_indication(doc, data)
-    _fill_summary(doc, data.summary.strip() or summary_default(chosen), genes)
+    # Printed as the form's Summary box holds it: blank until the user automates or types it.
+    _fill_summary(doc, data.summary.strip(), genes)
     snv = [v for v in chosen if kind(v) == "snv"]
     cnv = [v for v in chosen if kind(v) == "cnv"]
     mito_line = lambda: _para(doc, "Mitochondrial genome analysis", "'Mitochondrial genome analysis' line")  # noqa: E731

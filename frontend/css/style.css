@@ -35,6 +35,10 @@ header h1{font-size:17px;margin:0 auto 0 0;padding-right:12px;font-weight:700;le
 .btn.small{padding:4px 10px;font-size:12px}
 .btn.danger{color:var(--danger);border-color:#e8a9a9}
 .btn:disabled{opacity:.55;cursor:default}
+.ext-links{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.ext-links .hint{margin:0}
+a.btn.ext{text-decoration:none;display:inline-flex;align-items:center}
+a.btn.ext.disabled{opacity:.5;cursor:default;pointer-events:none}
 main{flex:1;display:flex;min-height:0}
 #form{width:50%;min-width:420px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface)}
 /* Steps (tabs), as in the CMC report automation tool */
@@ -127,6 +131,12 @@ label.inline{display:flex;align-items:center;gap:6px;margin:0;font-size:13px}
 label.inline select{width:auto}
 .detail-title{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 10px;padding-top:12px;border-top:2px solid var(--line);display:flex;align-items:center;gap:6px}
 .detail-title::before{content:'';width:3px;height:13px;background:var(--accent);border-radius:2px}
+/* "Automate summary / description" tick box beside a field label or section heading */
+.field-head{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-bottom:3px}
+.field-head > label{margin:0}
+label.auto-toggle{display:inline-flex;align-items:center;gap:5px;margin:0 0 0 8px;font-size:12.5px;font-weight:600;
+  color:var(--accent);text-transform:none;letter-spacing:normal;white-space:nowrap;cursor:pointer}
+label.auto-toggle input{width:auto;margin:0;accent-color:var(--accent);cursor:pointer}
 .row-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c2b36;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80vw}
 #toast.show{opacity:1}

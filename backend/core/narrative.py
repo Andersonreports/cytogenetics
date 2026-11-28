@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 
+from . import geneinfo
 from . import variants as vr
 
 _AMINO = {"Ala": "Alanine", "Arg": "Arginine", "Asn": "Asparagine", "Asp": "Aspartic acid",
@@ -69,7 +70,7 @@ def _disease_line(v: dict) -> str:
         return ""
     gmim = v.get("gene_mim", "") or vr.gene_mim_number(gene)
     gene_ref = f"the {gene} gene (OMIM*{gmim})" if gmim else f"the {gene} gene"
-    named = [_with_omim(d, _omim_ids(v, d)) for d in diseases]
+    named = [_with_omim(_lower_first(d), _omim_ids(v, d)) for d in diseases]
     if len(diseases) > 1:
         return f"Mutations in {gene_ref} are associated with {vr_joined(named)}."
     code = vr.disease_inheritance(v, diseases[0]) or (_codes(v)[0] if len(_codes(v)) == 1 else "")
@@ -113,10 +114,31 @@ def _cnv_description(v: dict) -> str:
 
 def description(v: dict) -> str:
     """Description box: the gene's function and its OMIM disease (a CNV: the copy
-    number change); paragraphs separated by a blank line."""
+    number change); paragraphs separated by a blank line. The gene-function paragraph
+    is the NCBI RefSeq summary when available (geneinfo), else the short built line."""
     if _kind(v) == "cnv":
         return _cnv_description(v)
-    return "\n\n".join(p for p in (_gene_line(v), _disease_line(v) if _kind(v) != "mito" else "") if p)
+    if _kind(v) == "mito":
+        return _gene_line(v)
+    gene_para = geneinfo.gene_function(v.get("gene", "").strip()) or _gene_line(v)
+    return "\n\n".join(p for p in (gene_para, _disease_line(v), _disease_clinical(v)) if p)
+
+
+def _disease_clinical(v: dict) -> str:
+    """The clinical-description paragraph(s) ('X is characterized by ...'), from NCBI
+    MedGen by each disease's OMIM phenotype number. Up to two, de-duplicated."""
+    diseases = [d.strip() for d in v.get("disease", "").split(";") if d.strip() and d.strip() != "-"]
+    out: list[str] = []
+    for d in diseases:
+        for omim in re.split(r"[,\s]+", _omim_ids(v, d)):   # same resolution as the association line
+            if omim.strip().isdigit():
+                txt = geneinfo.disease_description(omim.strip())
+                if txt and txt not in out:
+                    out.append(txt)
+                    break
+        if len(out) >= 2:
+            break
+    return "\n\n".join(out)
 
 
 # ---------------------------------------------------------------------------
@@ -154,8 +176,10 @@ def _variant_line(v: dict) -> str:
     zyg = "" if zyg == "-" else zyg
     cons = v.get("consequence", "").strip() or (
         "" if vr.sequence_ontology(v) == "-" else f"{vr.sequence_ontology(v)} variant")
-    cons = re.sub(r"\bVariant\b", "variant", cons)
-    cons = cons[:1].lower() + cons[1:] if cons[:2] != "3'" and cons[:2] != "5'" else cons
+    # lower-case each word but keep all-caps acronyms (UTR) and 3'/5'; end with "variant"
+    cons = " ".join(w if (len(w) > 1 and w.isupper()) else w.lower() for w in cons.split())
+    if cons and "variant" not in cons.split():
+        cons += " variant"
     if not cons:
         cons = "variant"
     what = " ".join(p for p in (zyg, cons) if p)
@@ -165,21 +189,35 @@ def _variant_line(v: dict) -> str:
             + (f" {loc}" if loc else "") + _protein_effect(v) + ".")
 
 
+def _fmt_pct(p: float) -> str:
+    """A percentage without scientific notation: '0.0046', '0.12', '3.4'."""
+    s = (f"{p:.2f}" if p >= 1 else f"{p:.6f}").rstrip("0").rstrip(".")
+    return s or "0"
+
+
 def _frequency_line(v: dict) -> str:
+    """The population-frequency sentence, in the lab's qualitative style (the reports
+    say 'extremely rare', 'not reported', rarely an exact figure, and never scientific
+    notation). An implausible value (> 100%) is reported without a number."""
     raw = str(v.get("gnomad_all", "")).strip()
+    if not raw:
+        return "This variant has not been reported in the general population database (gnomAD v4)."
     try:
-        af = float(raw) if raw else 0.0
+        af = float(raw)
     except ValueError:
         return ""
     if af <= 0:
         return "This variant has not been reported in the general population database (gnomAD v4)."
-    sa = str(v.get("gnomad_sa", "")).strip()
-    sa_text = ""
-    if sa.replace(".", "", 1).isdigit() and float(sa) > 0:
-        n = int(float(sa))
-        sa_text = f", with {n} allele{'s' if n != 1 else ''} in the South Asian population"
+    if af > 1:      # not a valid allele fraction (bad / percentage data): no bogus number
+        return "This variant has been reported in the general population database (gnomAD v4)."
+    pct = af * 100
+    if pct < 0.01:
+        return "This variant is extremely rare in the general population database (gnomAD v4)."
+    if pct < 0.1:
+        return ("This variant has been reported at a very low frequency in the general population "
+                "database (gnomAD v4).")
     return (f"This variant has been observed in the general population database (gnomAD v4) at an "
-            f"allele frequency of {af * 100:.2g}%{sa_text}.")
+            f"allele frequency of {_fmt_pct(pct)}%.")
 
 
 def _clinvar_line(v: dict) -> str:

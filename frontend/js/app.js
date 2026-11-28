@@ -19,7 +19,8 @@ window.fetch = async (...args) => {
 const G = { variants: [], current: -1, init: null, previewSeq: 0, timer: null, edited: new Set(), defaults: {} };
 // Boxes filled with the text built from the ticked variants (the server's /api/defaults)
 // until the user edits them; emptying a box hands it back to the generated text.
-const AUTO_FIELDS = ['summary', 'secondary_summary', 'incidental_summary', 'mito'];
+// The primary Summary is not one of them: it stays blank until "Automate summary" fills it.
+const AUTO_FIELDS = ['secondary_summary', 'incidental_summary', 'mito'];
 
 // Top bar menus (Draft / Export / account): one open at a time; a click elsewhere or on
 // one of its items closes it (Load draft closes once the file dialog has opened).
@@ -52,13 +53,25 @@ function applyData(d) {
   const p = d.patient || {};
   $$('[data-p]').forEach(el => el.value = p[el.dataset.p] || '');
   $$('[data-f]').forEach(el => el.value = d[el.dataset.f] || '');
-  syncRichFields();
   // Which generated boxes the user has changed (kept as typed). A draft saved before
   // this existed: a box with text in it counts as the user's.
   G.edited = new Set(Array.isArray(d.edited) ? d.edited : AUTO_FIELDS.filter(f => (d[f] || '').trim()));
+  // Summary: blank until automated or typed. Text the tool filled in by itself in an
+  // older save (not marked as the user's) is dropped.
+  // 'summary_auto' = automated (follows the ticked variants); 'summary' = the user's text.
+  if (Array.isArray(d.edited) && !d.edited.includes('summary') && !d.edited.includes('summary_auto'))
+    $('f-summary').value = '';
+  if ($('f-summary').value.trim() && !G.edited.has('summary_auto')) G.edited.add('summary');
+  syncRichFields();
   G.defaults = {};
   if (!$('p-report_date').value && G.init) $('p-report_date').value = G.init.today;
   G.variants = d.variants || [];
+  // Descriptions the tool filled in by itself in an older save (not marked as the
+  // user's) start blank: they appear again on "Automate description".
+  G.variants.forEach(v => {
+    if (v.description !== undefined && Array.isArray(v.edited) &&
+        !v.edited.includes('description') && !v.edited.includes('description_auto')) v.description = '';
+  });
   G.current = G.variants.length ? 0 : -1;
   renderVariants();
 }
@@ -216,6 +229,38 @@ function editorStatus(v) {
     + (v.selected ? 'ticked: in the report.' : 'not ticked: tick it in the list to include it.');
 }
 
+// A GRCh38 substitution locus {chr, pos, ref, alt} parsed from the Genomic position
+// box (e.g. "NC_000001.11:g.97450058C>T"), or null for indels / missing / mtDNA.
+function variantLocus(v) {
+  const g = ((v && v.genomic_position) || '').trim();
+  const m = g.match(/NC_0*(\d+)\.\d+\s*:\s*g\.(\d+)([ACGT]+)\s*>\s*([ACGT]+)/i);
+  if (!m) return null;
+  const chr = { 23: 'X', 24: 'Y' }[+m[1]] || String(+m[1]);
+  if (!chr || +m[1] === 12920) return null;   // mtDNA (NC_012920) has no g. subs here
+  return { chr, pos: m[2], ref: m[3].toUpperCase(), alt: m[4].toUpperCase() };
+}
+
+function setExtLink(a, href) {
+  if (!a) return;
+  if (href) { a.href = href; a.classList.remove('disabled'); a.removeAttribute('aria-disabled'); a.title = a.dataset.on; }
+  else { a.removeAttribute('href'); a.classList.add('disabled'); a.setAttribute('aria-disabled', 'true'); a.title = a.dataset.off; }
+}
+
+// Point the Franklin / GeneBe buttons at this variant (coordinates only, no patient data).
+function updateVariantLinks(v) {
+  const fr = $('lnk-franklin'), gb = $('lnk-genebe');
+  const loc = v && v.kind !== 'cnv' && v.kind !== 'mito' ? variantLocus(v) : null;
+  // The NC_…:g.… part of the box ("Chr3:NC_000003.12:g.15451708_15451713del (NM_…)" too).
+  const gm = ((v && v.genomic_position) || '').match(/NC_0*\d+\.\d+\s*:\s*g\.[^\s()]+/i);
+  const hgvs = (v && v.kind !== 'cnv' && v.kind !== 'mito' && gm) ? gm[0].replace(/\s+/g, '') : '';
+  // GeneBe accepts both chr-pos-ref-alt and a genomic HGVS (so it also covers indels).
+  setExtLink(gb, loc ? `https://genebe.net/variant/hg38/${loc.chr}-${loc.pos}-${loc.ref}-${loc.alt}`
+                     : hgvs ? `https://genebe.net/variant/hg38/${encodeURIComponent(hgvs)}` : null);
+  // Franklin's /snp/ page is for substitutions on nuclear chromosomes.
+  setExtLink(fr, loc ? `https://franklin.genoox.com/clinical-db/variant/snp/chr${loc.chr}-${loc.pos}-${loc.ref}-${loc.alt}-hg38`
+                     : null);
+}
+
 function showEditor() {
   const ed = $('veditor'), v = G.variants[G.current];
   $('vempty').style.display = v ? 'none' : '';
@@ -242,6 +287,7 @@ function showEditor() {
   vEdited(v);
   $('rich').innerHTML = textToRich(v.description);
   showVAutoState();
+  updateVariantLinks(v);
 }
 
 async function uploadExcel(file) {
@@ -336,17 +382,26 @@ async function refreshDefaults() {
     j = await r.json();
   } catch (e) { return; }
   G.defaults = j;
+  // An automated Summary follows the ticked variants until the user types in it.
+  const sumEl = $('f-summary');
+  if (G.edited.has('summary_auto') && !G.edited.has('summary') && document.activeElement !== sumEl._rich)
+    sumEl.value = G.defaults.summary || '';
+  const recEl = $('f-recommendations');          // automated Recommendations follow them too
+  if (G.edited.has('recommendations_auto') && document.activeElement !== recEl._rich)
+    recEl.value = G.defaults.recommendations || '';
   AUTO_FIELDS.forEach(f => {
     const el = $(`f-${f}`);
     if (!G.edited.has(f) && document.activeElement !== el._rich) el.value = G.defaults[f] || '';
   });
   syncRichFields();
-  // Each variant's Description box (built text until the user edits it).
+  // Each variant's built Description. The box stays blank until "Automate description";
+  // an automated one ('description_auto') follows the variant's values until edited.
   (j.variants || []).forEach((texts, i) => {
     const v = sent[i];
     if (!v || !G.variants.includes(v)) return;       // list changed meanwhile: next refresh
     v.auto = texts;
-    if (vEdited(v).includes('description')) return;
+    const ed = vEdited(v);
+    if (!ed.includes('description_auto') || ed.includes('description')) return;
     const isCur = v === G.variants[G.current];
     if (isCur && document.activeElement === $('rich')) return;
     if (v.description !== (texts.description || '')) {
@@ -461,16 +516,46 @@ function syncRichFields() {
 
 function showVAutoState() {
   const v = G.variants[G.current];
-  $$('[data-vrebuild]').forEach(b => {
-    const f = b.dataset.vrebuild;
-    b.style.display = v && vEdited(v).includes(f) && v.auto && (v.auto[f] || '') !== (v[f] || '') ? '' : 'none';
-  });
-  if (v) $('rich-hint').textContent = vEdited(v).includes('description')
-    ? 'Edited by you: printed as typed here. Rebuild brings back the text built from the variant.'
-    : "Built from the variant's values (Excel / OMIM); it follows them until you edit it.";
+  $('automate-description').checked = false;
+  if (!v) return;
+  const cur = (v.description || '').trim(), ed = vEdited(v);
+  const auto = !!cur && ed.includes('description_auto') && !ed.includes('description');
+  $('automate-description').checked = auto;
+  $('rich-hint').textContent = !cur
+    ? 'Blank: tick “Automate description” to build it from the variant’s values (Excel / OMIM / NCBI), or type your own.'
+    : auto ? 'Automated: follows the variant’s values until you edit it. Untick to remove it.'
+      : 'Edited by you: kept as typed. Tick “Automate description” to rebuild it and make it follow the variant again.';
+}
+
+// The Summary box's note: blank until "Automate summary"; then it follows the ticked
+// variants until the user types in it.
+function showSummaryHint() {
+  const hint = document.querySelector('[data-auto-hint="summary"]');
+  if (!hint) return;
+  const cur = $('f-summary').value.trim();
+  const auto = !!cur && G.edited.has('summary_auto') && !G.edited.has('summary');
+  $('automate-summary').checked = auto;
+  hint.textContent = !cur ? 'Blank: tick “Automate summary” to build it from the ticked variants, or type your own.'
+    : auto ? 'Automated: follows the ticked variants until you edit it. Untick to remove it.'
+      : 'Edited by you: kept as typed. Tick “Automate summary” to rebuild it and make it follow the variants again.';
+}
+
+// The Recommendations box's tick box and note.
+function showRecsHint() {
+  const hint = document.querySelector('[data-auto-hint="recommendations"]');
+  const cur = $('f-recommendations').value.trim();
+  const auto = !!cur && G.edited.has('recommendations_auto');
+  $('automate-recs').checked = auto;
+  if (!hint) return;
+  hint.textContent = !cur
+    ? 'Blank = no Recommendations section. Tick “Automate recommendations” for the standard lines (clinical correlation, genetic counselling) and finding-type lines (VUS, compound het, mtDNA, X-linked), or type your own.'
+    : auto ? 'Automated: follows the ticked variants until you edit it. Add disease-specific advice yourself; untick to remove.'
+      : 'Kept as typed. Tick “Automate recommendations” to replace it with the lines built from the ticked variants.';
 }
 
 function showAutoState() {
+  showSummaryHint();
+  showRecsHint();
   AUTO_FIELDS.forEach(f => {
     const el = $(`f-${f}`), edited = G.edited.has(f);
     const def = (G.defaults[f] || '').trim();
@@ -559,6 +644,46 @@ async function start() {
     syncRichFields();
     showAutoState(); changed();
   }));
+  // Automate recommendations (tick box): ticked = the standard and finding-type lines built
+  // from the ticked variants, following them; unticked = removed, box blank.
+  $('automate-recs').addEventListener('change', async e => {
+    const cb = e.target, ta = $('f-recommendations');
+    if (!cb.checked) {
+      ta.value = ''; G.edited.delete('recommendations_auto');
+      syncRichFields(); showRecsHint(); changed();
+      toast('Automated recommendations removed.');
+      return;
+    }
+    await refreshDefaults();                     // built from the ticked variants as they are now
+    const def = (G.defaults.recommendations || '').trim();
+    if (!def) { cb.checked = false; toast('Tick some variants first, then recommendations can be built.', 4000); return; }
+    if (ta.value.trim() && ta.value.trim() !== def &&
+        !confirm('Replace the text in the Recommendations box with the automated recommendations?')) { cb.checked = false; return; }
+    ta.value = def;
+    G.edited.add('recommendations_auto');        // follows the variants from now on
+    syncRichFields(); showRecsHint(); changed();
+    toast('Recommendations automated — add any disease-specific advice (that keeps your text as typed).');
+  });
+  // Automate summary (tick box): ticked = the Summary is built from the ticked variants and
+  // follows them; unticked = the automated text is removed and the box is blank.
+  $('automate-summary').addEventListener('change', async e => {
+    const cb = e.target, ta = $('f-summary');
+    if (!cb.checked) {
+      ta.value = ''; G.edited.delete('summary'); G.edited.delete('summary_auto');
+      syncRichFields(); showSummaryHint(); changed();
+      toast('Automated summary removed.');
+      return;
+    }
+    await refreshDefaults();                     // built from the ticked variants as they are now
+    const def = (G.defaults.summary || '').trim();
+    if (!def) { cb.checked = false; toast('The summary is still being built — try again in a moment.', 4000); return; }
+    if (G.edited.has('summary') && ta.value.trim() && ta.value.trim() !== def &&
+        !confirm('Replace your text in the Summary box with the automated summary?')) { cb.checked = false; return; }
+    ta.value = def;
+    G.edited.delete('summary'); G.edited.add('summary_auto');   // follows the variants from now on
+    syncRichFields(); showSummaryHint(); changed();
+    toast('Summary automated — it follows the ticked variants until you edit it.');
+  });
   updateSteps();
   let tab = 'patient';
   try { tab = localStorage.getItem(TAB_KEY) || 'patient'; } catch (e) {}
@@ -574,6 +699,7 @@ async function start() {
       refreshItem(G.current);
       $('ve-title').innerHTML = editorStatus(v);
       showCnvAuto(v);
+      if (el.dataset.v === 'genomic_position') updateVariantLinks(v);
     }
     if (el.dataset.v === 'kind') showEditor();
     const f = el.dataset.f;
@@ -581,6 +707,19 @@ async function start() {
       const v = el.value.trim();
       if (v && v !== (G.defaults[f] || '').trim()) G.edited.add(f); else G.edited.delete(f);
       showAutoState();
+    }
+    if (f === 'recommendations') {         // typed in it: kept as typed (stops following)
+      const v = el.value.trim();
+      if (!v || v !== (G.defaults.recommendations || '').trim()) G.edited.delete('recommendations_auto');
+      showRecsHint();
+    }
+    if (f === 'summary') {                 // typed in the Summary: the user's text from now on
+      const v = el.value.trim();
+      if (!v) { G.edited.delete('summary'); G.edited.delete('summary_auto'); }     // emptied: blank
+      else if (!(G.edited.has('summary_auto') && v === (G.defaults.summary || '').trim())) {
+        G.edited.add('summary'); G.edited.delete('summary_auto');
+      }
+      showSummaryHint();
     }
     changed();
   });
@@ -607,7 +746,9 @@ async function start() {
     const v = G.variants[G.current];
     if (!v) return;
     v.description = richToText($('rich'));
-    v.edited = v.auto && v.description === (v.auto.description || '') ? [] : ['description'];
+    const was = vEdited(v), stillAuto = was.includes('description_auto') && !was.includes('description')
+      && v.description === ((v.auto && v.auto.description) || '');
+    v.edited = !v.description.trim() ? [] : stillAuto ? ['description_auto'] : ['description'];
     showVAutoState();
   });
   $$('.rich').forEach(box => box.addEventListener('paste', e => {   // pasted text keeps its paragraphs, not its styles
@@ -629,14 +770,29 @@ async function start() {
       .forEach(b => b.classList.toggle('on', document.queryCommandState(b.dataset.cmd)));
   });
 
-  $$('[data-vrebuild]').forEach(b => b.addEventListener('click', e => {
-    e.preventDefault();
-    const v = G.variants[G.current], f = b.dataset.vrebuild;
-    if (!v) return;
-    v.edited = vEdited(v).filter(x => x !== f);
-    v[f] = (v.auto && v.auto[f]) || '';
+  // Automate description: fill the box with the text built from this variant's values.
+  // Automate description (tick box): ticked = built from this variant's values and follows
+  // them; unticked = the automated text is removed and the box is blank.
+  $('automate-description').addEventListener('change', async e => {
+    const cb = e.target, v = G.variants[G.current];
+    if (!v) { cb.checked = false; return; }
+    if (!cb.checked) {
+      v.description = ''; v.edited = [];
+      showEditor(); changed();
+      toast('Automated description removed.');
+      return;
+    }
+    await refreshDefaults();                     // built from the values as they are now
+    const def = ((v.auto && v.auto.description) || '').trim();
+    if (!def) { cb.checked = false; toast('Could not build the description yet — try again in a moment.', 4000); return; }
+    const cur = (v.description || '').trim();
+    if (vEdited(v).includes('description') && cur && cur !== def &&
+        !confirm('Replace your text in the Description box with the automated description?')) { cb.checked = false; return; }
+    v.description = v.auto.description;
+    v.edited = ['description_auto'];             // follows the variant's values from now on
     showEditor(); changed();
-  }));
+    toast('Description automated — it follows the variant’s values until you edit it.');
+  });
 
   $('vlist').addEventListener('click', e => {
     const tick = e.target.dataset.tick;

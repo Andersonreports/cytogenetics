@@ -35,14 +35,25 @@ def _table_text(doc, first):
 
 
 class RenderTests(unittest.TestCase):
-    def data(self, variants):
-        return ReportData(
+    def data(self, variants, automate=True):
+        d = ReportData(
             patient=PatientInfo(name="Test Patient", hosp_no="123456A", age="6 Years", lab_no="WES 01/26",
                                 sex="Male", sample="Peripheral Blood", referred_by="Dr. A",
                                 received_date="01/11/2026", unit="Clinical Genetics",
                                 report_date="23/11/2026"),
             indication="Seizures", variants=variants,
             recommendations="Counselling is advised.", signatory="Dr. B\nProfessor")
+        if automate:    # as after "Automate summary": the box holds the built summary
+            from backend.core.renderer import default_texts
+            d.summary = default_texts(d)["summary"]
+        return d
+
+    def test_blank_summary_prints_none(self):
+        """The Summary is printed as the box holds it: blank until automated or typed."""
+        texts = [t.strip() for t in _texts(render_report(self.data([dict(VARIANT)], automate=False)))]
+        i = texts.index("Summary:")
+        self.assertFalse(any(t.startswith("Whole exome analysis in this sample") for t in texts))
+        self.assertEqual(texts[i + 1], "")
 
     def test_with_variant(self):
         doc = render_report(self.data([dict(VARIANT)]))
@@ -342,10 +353,11 @@ class SummaryTests(unittest.TestCase):
         self.assertTrue(full.endswith("**Based on ACMG criteria, this variant is classified as a variant "
                                       "of uncertain significance.**"))
         self.assertTrue(t["omim_phenotype"].startswith("The STS gene encodes steroid sulfatase."))
-        self.assertIn("is associated with Ichthyosis, X-linked", t["omim_phenotype"])
+        self.assertIn("is associated with ichthyosis, X-linked", t["omim_phenotype"])
         self.assertIn("heterozygous missense variant in exon 8 (of 10), resulting in the substitution of "
                       "Arginine with Serine at amino acid position 381", t["evidence"])
-        self.assertIn("allele frequency of 0.00046%, with 4 alleles in the South Asian population", t["evidence"])
+        self.assertIn("This variant is extremely rare in the general population database (gnomAD v4).",
+                      t["evidence"])
         self.assertIn("classified as of uncertain significance in the ClinVar database", t["evidence"])
         self.assertEqual(t["statement"], "Based on ACMG criteria, this variant is classified as a variant "
                                          "of uncertain significance.")
